@@ -970,6 +970,15 @@ body {
   overflow: hidden;
 }
 
+.ps-req-filters { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+.ps-req-filters select, .ps-req-retention select { min-height: 25px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-input); color: var(--text-muted); font: inherit; font-size: 10px; }
+.ps-req-search { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 90px; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-soft); background: var(--bg-input); }
+.ps-req-search input { width: 100%; min-height: 25px; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 10px; }
+.ps-req-search input::placeholder { color: var(--text-soft); }
+.ps-req-sensitive, .ps-req-retention { display: inline-flex; align-items: center; gap: 4px; color: var(--text-soft); font-size: 10px; white-space: nowrap; }
+.ps-req-sensitive input { accent-color: var(--green); }
+.ps-req-copied { color: var(--green); font-size: 10px; }
+
 .ps-req-list {
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -1124,6 +1133,13 @@ body {
 .ps-saved-tunnel-main strong { overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .ps-saved-tunnel-main small { color: var(--text-soft); font-family: var(--mono-font); font-size: 10.5px; }
 .ps-saved-tunnel-actions { display: flex; gap: 4px; }
+.ps-usage-history { margin-top: 14px; padding: 17px 20px; }
+.ps-usage-history-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 12px; }
+.ps-usage-history-heading { margin-bottom: 6px; color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.ps-usage-history-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; min-height: 29px; border-top: 1px solid var(--border); color: var(--text-soft); font-family: var(--mono-font); font-size: 10.5px; }
+.ps-usage-history-row strong { color: var(--text); font-weight: 600; }
+.ps-usage-history-row small { color: var(--text-soft); font-family: var(--sans-font); font-size: 10px; }
+.ps-usage-history-note { margin: 13px 0 0; color: var(--text-soft); font-size: 10.5px; }
 
 .ps-tunnel-card-header {
   display: flex;
@@ -1195,5 +1211,11 @@ body {
 .ps-port-status.offline { color: var(--red); }
 .ps-route-rules { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
 .ps-route-rules-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ps-route-rule { display: grid; grid-template-columns: minmax(100px, 1fr) auto minmax(90px, 130px) auto; gap: 8px; align-items: center; }
+.ps-route-rule { display: grid; grid-template-columns: minmax(100px, 1fr) auto minmax(90px, 130px) auto auto; gap: 8px; align-items: center; }
 .ps-route-rule .ps-input-prefix { margin-right: -4px; }
+.ps-route-path { position: relative; min-width: 0; }
+.ps-route-path .ps-input { width: 100%; }
+.ps-route-fallback { position: absolute; top: 50%; right: 7px; transform: translateY(-50%); color: var(--cyan); font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
+.ps-route-port-status { color: var(--text-soft); font-size: 10px; white-space: nowrap; }
+.ps-route-port-status.listening { color: var(--green); }
+.ps-route-port-status.offline { color: var(--red, #f87171); }

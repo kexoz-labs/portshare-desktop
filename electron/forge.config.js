@@ -5,8 +5,6 @@ module.exports = {
   packagerConfig: {
     asar: true,
     icon: './assets/logo.png',
-    // Keep the executable name lowercase so it matches the name the
-    // deb/rpm installers look for (they default to package.json "name").
     executableName: 'portshare',
     extraResource: ['../frontend/dist'],
   },
@@ -64,8 +62,8 @@ module.exports = {
       name: '@electron-forge/publisher-github',
       config: {
         repository: {
-          owner: 'jagadesh31',
-          name: 'Portshare'
+          owner: 'kexoz-labs',
+          name: 'portshare-desktop'
         },
         prerelease: false,
         draft: false

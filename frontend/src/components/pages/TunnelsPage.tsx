@@ -15,6 +15,7 @@ type Props = {
   requestLog: RequestLogEntry[]
   routeRules: Array<{ path: string; port: number }>
   onRouteRulesChange: (rules: Array<{ path: string; port: number }>) => void
+  routePortStatus: Record<number, boolean | null>
   persistentTunnels: PersistentTunnel[]
   selectedTunnelId: string | null
   onSelectTunnel: (tunnel: PersistentTunnel) => void
@@ -35,7 +36,7 @@ const statusText: Record<ConnectionState, string> = {
 
 export default function TunnelsPage({
   session, connState, portInput, setPortInput, onPortSubmit,
-  onCopyUrl, copyFeedback, requestLog, routeRules, onRouteRulesChange, portListening, isBusy, onNewTunnel
+  onCopyUrl, copyFeedback, requestLog, routeRules, onRouteRulesChange, routePortStatus, portListening, isBusy, onNewTunnel
   , persistentTunnels, selectedTunnelId, onSelectTunnel, onStartTunnel, onStopTunnel, onDeleteTunnel
 }: Props) {
   const publicUrl = session?.subdomain ? `https://${session.subdomain}.${ROOT_DOMAIN}` : null
@@ -149,7 +150,7 @@ export default function TunnelsPage({
                 {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 Advanced Options
               </button>
-              {showAdvanced && <RouteRulesEditor rules={routeRules} onChange={onRouteRulesChange} />}
+              {showAdvanced && <RouteRulesEditor rules={routeRules} onChange={onRouteRulesChange} portStatus={routePortStatus} />}
             </div>
 
             <div className="ps-tunnel-card-stats">

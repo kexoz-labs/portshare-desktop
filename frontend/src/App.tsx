@@ -67,11 +67,14 @@ export default function App() {
     }
   })
   const [portListening, setPortListening] = useState<boolean | null>(null)
+  const [routePortStatus, setRoutePortStatus] = useState<Record<number, boolean | null>>({})
   const [bytesIn, setBytesIn] = useState(0)
   const [bytesOut, setBytesOut] = useState(0)
+  const [dailyUsage, setDailyUsage] = useState<import('./lib/api').UsagePoint[]>([])
+  const [monthlyUsage, setMonthlyUsage] = useState<import('./lib/api').UsagePoint[]>([])
 
   const { theme, toggleTheme } = useTheme()
-  const { requestLog, totalRequests, addLogEntry, clearLog } = useRequestLog()
+  const { requestLog, totalRequests, retention, setRetention, addLogEntry, clearLog } = useRequestLog()
 
   useEffect(() => {
     if (!infoMessage && !errorMessage) return
@@ -86,6 +89,7 @@ export default function App() {
   const routesRef = useRef<Array<{ path: string; port: number }>>([])
   const tunnelClose = useRef<(() => void) | null>(null)
   const verifyAttempt = useRef(0)
+  const lastPortListening = useRef<boolean | null>(null)
 
   const openTunnelConnection = useCallback((clientId: string) => {
     tunnelClose.current?.()
@@ -128,7 +132,15 @@ export default function App() {
       return
     }
     if (window.portshare?.checkPort) {
-      setPortListening(await window.portshare.checkPort(port))
+      const listening = await window.portshare.checkPort(port)
+      setPortListening(listening)
+      if (lastPortListening.current === true && !listening) {
+        void window.portshare.notify?.({
+          title: 'PortShare: local app offline',
+          body: `localhost:${port} is no longer accepting connections.`,
+        })
+      }
+      lastPortListening.current = listening
       return
     }
     setPortListening(null)
@@ -140,6 +152,18 @@ export default function App() {
     const id = window.setInterval(() => void checkListening(tunnelPort.current), 5000)
     return () => window.clearInterval(id)
   }, [checkListening, step])
+
+  useEffect(() => {
+    if (step !== 'dashboard' || !window.portshare?.checkPort) return
+    const refreshRoutePorts = async () => {
+      const ports = [...new Set(routeRules.map(rule => rule.port).filter(port => Number.isInteger(port) && port > 0))]
+      const results = await Promise.all(ports.map(async port => [port, await window.portshare!.checkPort(port)] as const))
+      setRoutePortStatus(Object.fromEntries(results))
+    }
+    void refreshRoutePorts()
+    const id = window.setInterval(() => void refreshRoutePorts(), 5000)
+    return () => window.clearInterval(id)
+  }, [routeRules, step])
 
   useEffect(() => {
     if (connState !== 'connected') return
@@ -164,6 +188,8 @@ export default function App() {
         })
         setBytesIn(stats.bytesIn ?? 0)
         setBytesOut(stats.bytesOut ?? 0)
+        setDailyUsage(stats.dailyUsage ?? [])
+        setMonthlyUsage(stats.monthlyUsage ?? [])
       } catch {
         // Keep last known values if stats briefly fail.
       }
@@ -464,6 +490,47 @@ export default function App() {
     }
   }
 
+  const exportTunnelConfiguration = () => {
+    if (!session) return
+    const payload = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tunnels: persistentTunnels.map(({ subdomain, customDomain, port, requireAuth, pathRoutes }) => ({ subdomain, customDomain, port, requireAuth, pathRoutes })) }, null, 2)
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'portshare-tunnels.json'
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success('Tunnel configuration exported')
+  }
+
+  const importTunnelConfiguration = async (file: File) => {
+    if (!session) return
+    setIsBusy(true)
+    try {
+      const parsed = JSON.parse(await file.text()) as { tunnels?: Array<Partial<PersistentTunnel>> }
+      const imported = parsed.tunnels ?? []
+      if (!imported.length) throw new Error('The file does not contain any tunnels.')
+      const created = [] as PersistentTunnel[]
+      for (const tunnel of imported) {
+        const port = tunnel.port
+        if (!tunnel.subdomain || typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) continue
+        created.push(await createTunnel(session.id, {
+          subdomain: tunnel.subdomain,
+          customDomain: tunnel.customDomain ?? '',
+          port,
+          requireAuth: tunnel.requireAuth === true,
+          pathRoutes: tunnel.pathRoutes?.length ? tunnel.pathRoutes : [{ path: '/', port }],
+        }))
+      }
+      if (!created.length) throw new Error('No valid tunnel configurations were found.')
+      setPersistentTunnels(current => [...current, ...created])
+      toast.success(`${created.length} tunnel${created.length === 1 ? '' : 's'} imported`)
+    } catch (err) {
+      toast.error(extractError(err))
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
   const handleCopyUrl = async () => {
     if (!publicUrl) return
     try {
@@ -578,9 +645,12 @@ export default function App() {
                 requestLog={requestLog}
                 bytesIn={bytesIn}
                 bytesOut={bytesOut}
+                dailyUsage={dailyUsage}
+                monthlyUsage={monthlyUsage}
                 portListening={portListening}
                 routeRules={routeRules}
                 onRouteRulesChange={setRouteRules}
+                routePortStatus={routePortStatus}
                 statusMessage={statusMessage}
                 uptimeSeconds={uptimeSeconds}
                 showNewTunnel={showNewTunnel}
@@ -621,6 +691,7 @@ export default function App() {
                 requestLog={requestLog}
                 routeRules={routeRules}
                 onRouteRulesChange={setRouteRules}
+                routePortStatus={routePortStatus}
                 persistentTunnels={persistentTunnels}
                 selectedTunnelId={selectedTunnelId}
                 onSelectTunnel={selectPersistentTunnel}
@@ -639,6 +710,8 @@ export default function App() {
               <RequestsPage
                 requestLog={requestLog}
                 onClear={clearLog}
+                retention={retention}
+                onRetentionChange={setRetention}
               />
             )}
 
@@ -660,6 +733,9 @@ export default function App() {
                 onVerify={() => void startGoogleVerify()}
                 onUpgrade={() => void handleUpgrade()}
                 onCopyClientId={() => void handleCopyClientId()}
+                tunnels={persistentTunnels}
+                onExportTunnels={exportTunnelConfiguration}
+                onImportTunnels={(file) => void importTunnelConfiguration(file)}
                 verifying={verifying}
                 gauthEnabled={gauthEnabled}
               />

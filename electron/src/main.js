@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, protocol, net, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, protocol, net, ipcMain, Tray, Menu, nativeImage, Notification } = require('electron');
 const http = require('node:http');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -21,6 +21,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const VITE_DEV_URL = process.env.PORTSHARE_VITE_URL || 'http://127.0.0.1:5173';
+let tray = null;
+let mainWindow = null;
+let isQuitting = false;
 
 const SKIP_REQUEST_HEADERS = new Set([
   'host',
@@ -125,8 +128,14 @@ ipcMain.handle('portshare:check-port', async (_event, value) => {
   });
 });
 
+ipcMain.handle('portshare:notify', async (_event, { title, body }) => {
+  if (!Notification.isSupported()) return false;
+  new Notification({ title: String(title || 'PortShare'), body: String(body || '') }).show();
+  return true;
+});
+
 const createWindow = () => {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -149,6 +158,12 @@ const createWindow = () => {
     mainWindow.show();
   });
 
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow.hide();
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:') || url.startsWith('http:')) {
       void shell.openExternal(url);
@@ -167,6 +182,19 @@ const createWindow = () => {
   void mainWindow.loadURL('portshare://app/');
 };
 
+const createTray = () => {
+  const icon = nativeImage.createFromPath(path.join(__dirname, '../assets/logo.png'));
+  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
+  tray.setToolTip('PortShare');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Show PortShare', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { label: 'Hide PortShare', click: () => mainWindow?.hide() },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
+  ]));
+  tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+};
+
 app.whenReady().then(() => {
   if (app.isPackaged) {
     const distRoot = path.join(process.resourcesPath, 'dist');
@@ -183,6 +211,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -192,7 +221,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // Keep the tray resident until the user explicitly chooses Quit.
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });

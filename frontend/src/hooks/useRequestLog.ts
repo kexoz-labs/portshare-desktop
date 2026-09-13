@@ -4,14 +4,27 @@ import type { RequestLogEntry } from '../lib/api'
 export function useRequestLog() {
   const [requestLog, setRequestLog] = useState<RequestLogEntry[]>([])
   const [totalRequests, setTotalRequests] = useState(0)
+  const [retention, setRetentionState] = useState(() => {
+    const saved = Number(window.localStorage.getItem('portshare-request-retention'))
+    return saved === 50 || saved === 100 || saved === 250 ? saved : 100
+  })
+  const retentionRef = useRef(retention)
   const logBodyRef = useRef<HTMLDivElement | null>(null)
 
   const addLogEntry = useCallback((entry: RequestLogEntry) => {
     setRequestLog(prev => {
       const next = [...prev, entry]
-      return next.length > 100 ? next.slice(-100) : next
+      return next.length > retentionRef.current ? next.slice(-retentionRef.current) : next
     })
     setTotalRequests(n => n + 1)
+  }, [])
+
+  const setRetention = useCallback((value: number) => {
+    const next = value === 50 || value === 100 || value === 250 ? value : 100
+    setRetentionState(next)
+    retentionRef.current = next
+    window.localStorage.setItem('portshare-request-retention', String(next))
+    setRequestLog(current => current.slice(-next))
   }, [])
 
   const clearLog = useCallback(() => {
@@ -19,5 +32,5 @@ export function useRequestLog() {
     setTotalRequests(0)
   }, [])
 
-  return { requestLog, totalRequests, logBodyRef, addLogEntry, clearLog }
+  return { requestLog, totalRequests, retention, setRetention, logBodyRef, addLogEntry, clearLog }
 }

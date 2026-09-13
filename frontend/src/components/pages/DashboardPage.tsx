@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Copy, ExternalLink, Activity, Clock, Database, Plus, ChevronDown, ChevronUp, Check } from 'lucide-react'
-import type { ClientSession, ConnectionState, RequestLogEntry } from '../../lib/api'
+import type { ClientSession, ConnectionState, RequestLogEntry, UsagePoint } from '../../lib/api'
 import { ROOT_DOMAIN, tierOf } from '../../lib/api'
 import NewTunnelModal from '../modals/NewTunnelModal'
 import TunnelConsole from '../dashboard/TunnelConsole'
@@ -24,9 +24,12 @@ type Props = {
   requestLog: RequestLogEntry[]
   bytesIn: number
   bytesOut: number
+  dailyUsage: UsagePoint[]
+  monthlyUsage: UsagePoint[]
   portListening: boolean | null
   routeRules: Array<{ path: string; port: number }>
   onRouteRulesChange: (rules: Array<{ path: string; port: number }>) => void
+  routePortStatus: Record<number, boolean | null>
   statusMessage: string
   uptimeSeconds: number
   showNewTunnel: boolean
@@ -60,7 +63,7 @@ export default function DashboardPage({
   session, connState, portInput, setPortInput, onPortSubmit,
   domainInput, setDomainInput, onDomainSubmit,
   gauthEnabled, onAuthToggle, isBusy,
-  totalRequests, onCopyUrl, copyFeedback, requestLog, bytesIn, bytesOut, portListening, routeRules, onRouteRulesChange, statusMessage, uptimeSeconds,
+  totalRequests, onCopyUrl, copyFeedback, requestLog, bytesIn, bytesOut, dailyUsage, monthlyUsage, portListening, routeRules, onRouteRulesChange, routePortStatus, statusMessage, uptimeSeconds,
   showNewTunnel, onOpenNewTunnel, onCloseNewTunnel, onCreateTunnel,
 }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -212,7 +215,7 @@ export default function DashboardPage({
                     <div className="ps-toggle-track" />
                   </label>
                 </div>
-                <RouteRulesEditor rules={routeRules} onChange={onRouteRulesChange} />
+                <RouteRulesEditor rules={routeRules} onChange={onRouteRulesChange} portStatus={routePortStatus} />
               </div>
             )}
           </div>
@@ -232,6 +235,10 @@ export default function DashboardPage({
               <span className="ps-tunnel-stat-value">{formatBytes(bytesOut)}</span>
             </div>
             <div className="ps-tunnel-stat">
+              <span className="ps-tunnel-stat-label">Total bytes</span>
+              <span className="ps-tunnel-stat-value">{formatBytes(bytesIn + bytesOut)}</span>
+            </div>
+            <div className="ps-tunnel-stat">
               <span className="ps-tunnel-stat-label">Bandwidth</span>
               <span className="ps-tunnel-stat-value">{session ? formatBytes(session.bandwidthUsed) : '—'}</span>
             </div>
@@ -247,6 +254,15 @@ export default function DashboardPage({
             </div>
           </div>
         </div>
+
+        {(dailyUsage.length > 0 || monthlyUsage.length > 0) && <div className="ps-card ps-usage-history animate-fade-up delay-100">
+          <div className="ps-section-title">Usage history</div>
+          <div className="ps-usage-history-grid">
+            <div><div className="ps-usage-history-heading">Daily · last 30 days</div>{dailyUsage.slice(0, 7).map(point => <div className="ps-usage-history-row" key={point.period}><span>{point.period}</span><strong>{formatBytes(point.totalBytes)}</strong><small>{point.totalRequests} requests</small></div>)}</div>
+            <div><div className="ps-usage-history-heading">Monthly</div>{monthlyUsage.slice(0, 6).map(point => <div className="ps-usage-history-row" key={point.period}><span>{point.period}</span><strong>{formatBytes(point.totalBytes)}</strong><small>{point.totalRequests} requests</small></div>)}</div>
+          </div>
+          <p className="ps-usage-history-note">Bandwidth includes request and response bodies plus HTTP request and response headers.</p>
+        </div>}
 
         {/* Bandwidth usage */}
         {session && (

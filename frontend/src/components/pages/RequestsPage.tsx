@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { RequestLogEntry } from '../../lib/api'
 import { isNoiseRequestPath } from '../../lib/tunnel'
-import { Trash2, ChevronRight } from 'lucide-react'
+import { Trash2, ChevronRight, Copy, Download, Search } from 'lucide-react'
 
 type Props = {
   requestLog: RequestLogEntry[]
   onClear: () => void
+  retention: number
+  onRetentionChange: (value: number) => void
 }
 
 function methodClass(method: string) {
@@ -24,12 +26,62 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-export default function RequestsPage({ requestLog, onClear }: Props) {
+const SENSITIVE_HEADERS = /authorization|cookie|set-cookie|proxy-authorization|x-api-key|x-auth-token/i
+
+function formatBody(body: string | undefined) {
+  if (!body) return ''
+  try { return JSON.stringify(JSON.parse(body), null, 2) } catch { return body }
+}
+
+function redactHeaders(headers: Record<string, string> | undefined, showSensitive: boolean) {
+  return Object.entries(headers ?? {}).map(([key, value]) => [key, !showSensitive && SENSITIVE_HEADERS.test(key) ? '[hidden]' : value] as const)
+}
+
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function curlCommand(entry: RequestLogEntry) {
+  const headers = Object.entries(entry.headers ?? {}).map(([key, value]) => ` -H ${shellQuote(`${key}: ${value}`)}`).join('')
+  const body = entry.body ? ` --data-raw ${shellQuote(entry.body)}` : ''
+  return `curl -X ${entry.method}${headers}${body} ${shellQuote(entry.path)}`
+}
+
+export default function RequestsPage({ requestLog, onClear, retention, onRetentionChange }: Props) {
   const [selected, setSelected] = useState<RequestLogEntry | null>(null)
   const [activeTab, setActiveTab] = useState<'headers' | 'body' | 'response' | 'timing'>('headers')
   const [showFrameworkRequests, setShowFrameworkRequests] = useState(false)
+  const [search, setSearch] = useState('')
+  const [methodFilter, setMethodFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [showSensitive, setShowSensitive] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  const displayLog = showFrameworkRequests ? requestLog : requestLog.filter(entry => !isNoiseRequestPath(entry.path))
+  const methods = useMemo(() => [...new Set(requestLog.map(entry => entry.method))].sort(), [requestLog])
+  const displayLog = requestLog.filter(entry => {
+    if (!showFrameworkRequests && isNoiseRequestPath(entry.path)) return false
+    if (methodFilter !== 'all' && entry.method !== methodFilter) return false
+    if (statusFilter !== 'all' && !String(entry.status ?? '').startsWith(statusFilter)) return false
+    return !search.trim() || `${entry.method} ${entry.path}`.toLowerCase().includes(search.trim().toLowerCase())
+  })
+
+  const copyCurl = async () => {
+    if (!selected) return
+    await navigator.clipboard.writeText(curlCommand(selected))
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+
+  const exportCurl = () => {
+    if (!selected) return
+    const blob = new Blob([`${curlCommand(selected)}\n`], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `portshare-${selected.id || 'request'}.sh`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="ps-main" style={{ overflow: 'hidden' }}>
@@ -41,6 +93,7 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
               Requests {displayLog.length > 0 && <span style={{ color: 'var(--text-soft)' }}>({displayLog.length})</span>}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label className="ps-req-retention">Keep <select value={retention} onChange={event => onRetentionChange(Number(event.target.value))}><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option></select></label>
               <button className={`ps-btn ps-btn-ghost ps-btn-sm ${showFrameworkRequests ? 'active' : ''}`} onClick={() => setShowFrameworkRequests(value => !value)}>
                 {showFrameworkRequests ? 'Hide assets' : 'Show assets'}
               </button>
@@ -48,6 +101,13 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
                 <Trash2 size={12} />
               </button>
             </div>
+          </div>
+
+          <div className="ps-req-filters">
+            <div className="ps-req-search"><Search size={12} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search method or path" /></div>
+            <select value={methodFilter} onChange={event => setMethodFilter(event.target.value)}><option value="all">All methods</option>{methods.map(method => <option key={method} value={method}>{method}</option>)}</select>
+            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="all">All status</option><option value="2">2xx</option><option value="3">3xx</option><option value="4">4xx</option><option value="5">5xx</option></select>
+            <label className="ps-req-sensitive"><input type="checkbox" checked={showSensitive} onChange={event => setShowSensitive(event.target.checked)} /> Sensitive headers</label>
           </div>
 
           {displayLog.length === 0 ? (
@@ -98,6 +158,9 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
                     {selected.durationMs}ms
                   </span>
                 )}
+                <button className="ps-btn-icon" onClick={() => void copyCurl()} title="Copy as cURL"><Copy size={12} /></button>
+                <button className="ps-btn-icon" onClick={exportCurl} title="Export request as cURL"><Download size={12} /></button>
+                {copied && <span className="ps-req-copied">Copied</span>}
               </div>
 
               <div className="ps-detail-tabs">
@@ -132,8 +195,8 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
                         Request Headers
                       </div>
                       <div className="ps-code">
-                        {selected.headers && Object.keys(selected.headers).length > 0 ? (
-                          Object.entries(selected.headers).map(([k, v]) => (
+                          {selected.headers && Object.keys(selected.headers).length > 0 ? (
+                          redactHeaders(selected.headers, showSensitive).map(([k, v]) => (
                             <div key={k}><span style={{ color: 'var(--text-muted)' }}>{k}:</span> {v}</div>
                           ))
                         ) : (
@@ -149,7 +212,7 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
                       Request Body
                     </div>
                     <div className="ps-code" style={{ whiteSpace: 'pre' }}>
-                      {selected.method === 'GET' ? '(no body)' : (selected.body || '(empty body)')}
+                      {selected.method === 'GET' ? '(no body)' : (formatBody(selected.body) || '(empty body)')}
                     </div>
                   </div>
                 )}
@@ -165,7 +228,7 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
                         </div>
                         <div className="ps-code">
                           {selected.responseHeaders && Object.keys(selected.responseHeaders).length > 0
-                            ? Object.entries(selected.responseHeaders).map(([key, value]) => <div key={key}><span style={{ color: 'var(--text-muted)' }}>{key}:</span> {value}</div>)
+                            ? redactHeaders(selected.responseHeaders, showSensitive).map(([key, value]) => <div key={key}><span style={{ color: 'var(--text-muted)' }}>{key}:</span> {value}</div>)
                             : '(No response headers recorded)'}
                         </div>
                       </div>
@@ -173,7 +236,7 @@ export default function RequestsPage({ requestLog, onClear }: Props) {
                         Response Body
                       </div>
                       <div className="ps-code" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                        {selected.responseBody || '(empty response body)'}
+                        {formatBody(selected.responseBody) || '(empty response body)'}
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Monitor, Shield, Wifi } from 'lucide-react'
-import { tierOf, type ClientSession } from '../../lib/api'
+import { Download, Monitor, Shield, Upload, Wifi } from 'lucide-react'
+import { tierOf, type ClientSession, type PersistentTunnel } from '../../lib/api'
 import { API_BASE_URL, ROOT_DOMAIN } from '../../lib/api'
 
 type SettingsSection = 'appearance' | 'tunnel' | 'account'
@@ -20,6 +20,9 @@ type Props = {
   onCopyClientId: () => void
   verifying: boolean
   gauthEnabled: boolean
+  tunnels: PersistentTunnel[]
+  onExportTunnels: () => void
+  onImportTunnels: (file: File) => void
 }
 
 const TIER_LABEL: Record<string, string> = {
@@ -29,7 +32,7 @@ const TIER_LABEL: Record<string, string> = {
   pro_plus: 'Pro+ · 10 GB',
 }
 
-export default function SettingsPage({ theme, onToggleTheme, session, onVerify, onUpgrade, onCopyClientId, verifying, gauthEnabled }: Props) {
+export default function SettingsPage({ theme, onToggleTheme, session, onVerify, onUpgrade, onCopyClientId, verifying, gauthEnabled, tunnels, onExportTunnels, onImportTunnels }: Props) {
   const [active, setActive] = useState<SettingsSection>('appearance')
   const tier = tierOf(session)
 
@@ -120,6 +123,16 @@ export default function SettingsPage({ theme, onToggleTheme, session, onVerify, 
                   <span style={{ fontFamily: 'var(--mono-font)', fontSize: 11.5, color: 'var(--text-soft)' }}>
                     {ROOT_DOMAIN}
                   </span>
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Tunnel configuration</div>
+                    <div className="ps-settings-row-desc">Backup or restore {tunnels.length} saved tunnel{tunnels.length === 1 ? '' : 's'} as JSON</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="ps-btn ps-btn-secondary ps-btn-sm" onClick={onExportTunnels} disabled={!tunnels.length}><Download size={13} /> Export</button>
+                    <label className="ps-btn ps-btn-secondary ps-btn-sm"><Upload size={13} /> Import<input type="file" accept="application/json,.json" hidden onChange={event => { const file = event.target.files?.[0]; if (file) onImportTunnels(file); event.currentTarget.value = '' }} /></label>
+                  </div>
                 </div>
               </div>
             )}

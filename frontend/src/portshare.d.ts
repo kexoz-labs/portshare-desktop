@@ -23,6 +23,7 @@ declare global {
     portshare?: {
       localRequest: (payload: LocalRequestPayload) => Promise<LocalRequestResult>
       checkPort: (port: number) => Promise<boolean>
+      notify: (payload: { title: string; body: string }) => Promise<boolean>
     }
   }
 }

@@ -164,6 +164,16 @@ export type ClientStatsResponse = {
   bytesOut?: number
   bandwidthUsed?: number
   bandwidthLimit?: number
+  dailyUsage?: UsagePoint[]
+  monthlyUsage?: UsagePoint[]
+}
+
+export type UsagePoint = {
+  period: string
+  bytesIn: number
+  bytesOut: number
+  totalBytes: number
+  totalRequests: number
 }
 
 export const fetchClientStats = async (clientId: string): Promise<ClientStatsResponse> => {
