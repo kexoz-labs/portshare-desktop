@@ -4,14 +4,15 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
-  for (const name of ['VITE_PORTSHARE_API_BASE', 'VITE_PORTSHARE_ROOT_DOMAIN']) {
-    if (!env[name]?.trim()) {
-      throw new Error(`Missing required environment variable: ${name}`)
-    }
-  }
+  const apiBase = env.VITE_PORTSHARE_API_BASE?.trim() || process.env.VITE_PORTSHARE_API_BASE?.trim() || 'https://api.portshare.kexoz.dev'
+  const rootDomain = env.VITE_PORTSHARE_ROOT_DOMAIN?.trim() || process.env.VITE_PORTSHARE_ROOT_DOMAIN?.trim() || 'portshare.kexoz.dev'
 
   return {
     base: './',
+    define: {
+      'import.meta.env.VITE_PORTSHARE_API_BASE': JSON.stringify(apiBase),
+      'import.meta.env.VITE_PORTSHARE_ROOT_DOMAIN': JSON.stringify(rootDomain),
+    },
     plugins: [react()],
     server: {
       port: 5173,

@@ -102,6 +102,15 @@ export default function TunnelsPage({
                 {statusText[connState]}
               </span>
               <div style={{ display: 'flex', gap: 6 }}>
+                {session.port && <a
+                  href={`http://127.0.0.1:${session.port}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ps-btn ps-btn-secondary ps-btn-sm"
+                  title="Open local app"
+                >
+                  Local app
+                </a>}
                 {publicUrl && (
                   <>
                     <button className="ps-btn-icon" onClick={onCopyUrl} title="Copy URL">
@@ -115,6 +124,9 @@ export default function TunnelsPage({
                       title="Open in browser"
                     >
                       <ExternalLink size={12} />
+                    </a>
+                    <a href={publicUrl} target="_blank" rel="noreferrer" className="ps-btn ps-btn-secondary ps-btn-sm" title="Open public URL">
+                      Public URL
                     </a>
                   </>
                 )}

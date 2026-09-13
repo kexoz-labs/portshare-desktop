@@ -85,6 +85,28 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [infoMessage, errorMessage])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable || target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+      const pages: Record<string, Page> = { '1': 'dashboard', '2': 'tunnels', '3': 'requests', '4': 'domains', '5': 'settings' }
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        setActivePage('tunnels')
+        setShowNewTunnel(true)
+        return
+      }
+      const page = pages[event.key]
+      if (page) {
+        event.preventDefault()
+        setActivePage(page)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const tunnelPort = useRef<number | null>(null)
   const routesRef = useRef<Array<{ path: string; port: number }>>([])
   const tunnelClose = useRef<(() => void) | null>(null)

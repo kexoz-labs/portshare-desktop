@@ -45,6 +45,9 @@ jobs:
               electron/release-assets/portshare-linux-arm64.rpm
               electron/release-assets/PortShare-linux-arm64.zip
     runs-on: ${{ matrix.os }}
+    env:
+      VITE_PORTSHARE_API_BASE: https://api.portshare.kexoz.dev
+      VITE_PORTSHARE_ROOT_DOMAIN: portshare.kexoz.dev
 
     steps:
       - name: Checkout Code
@@ -53,7 +56,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Linux packaging tools
         if: matrix.os == 'ubuntu-latest'

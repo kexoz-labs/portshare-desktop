@@ -93,6 +93,13 @@ export default function SettingsPage({ theme, onToggleTheme, session, onVerify, 
                     Open account
                   </a>
                 </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Keyboard shortcuts</div>
+                    <div className="ps-settings-row-desc">Navigate quickly without leaving the keyboard</div>
+                  </div>
+                  <span style={{ color: 'var(--text-soft)', fontFamily: 'var(--mono-font)', fontSize: 11 }}>Ctrl/Cmd+1-5, Ctrl/Cmd+N</span>
+                </div>
               </div>
             )}
 

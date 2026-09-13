@@ -76,13 +76,13 @@ export type RequestLogEntry = {
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected'
 
-const requiredEnv = (value: string | undefined, name: string): string => {
-  if (!value?.trim()) throw new Error(`Missing required environment variable: ${name}`)
-  return value.trim()
+const defaultOrEnv = (value: string | undefined, defaultValue: string): string => {
+  if (value && value.trim()) return value.trim()
+  return defaultValue
 }
 
-export const API_BASE_URL = requiredEnv(import.meta.env.VITE_PORTSHARE_API_BASE, 'VITE_PORTSHARE_API_BASE')
-export const ROOT_DOMAIN  = requiredEnv(import.meta.env.VITE_PORTSHARE_ROOT_DOMAIN, 'VITE_PORTSHARE_ROOT_DOMAIN')
+export const API_BASE_URL = defaultOrEnv(import.meta.env.VITE_PORTSHARE_API_BASE, 'https://api.portshare.kexoz.dev')
+export const ROOT_DOMAIN  = defaultOrEnv(import.meta.env.VITE_PORTSHARE_ROOT_DOMAIN, 'portshare.kexoz.dev')
 
 export const ensureClientIdentity = async (existingId: string | null): Promise<ClientSession> => {
   const payload = existingId ? { id: existingId } : {}
