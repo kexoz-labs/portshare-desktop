@@ -1,0 +1,184 @@
+import { useState } from 'react'
+import { Monitor, Shield, Wifi } from 'lucide-react'
+import { tierOf, type ClientSession } from '../../lib/api'
+import { API_BASE_URL, ROOT_DOMAIN } from '../../lib/api'
+
+type SettingsSection = 'appearance' | 'tunnel' | 'account'
+
+const sections: { id: SettingsSection; label: string; icon: typeof Monitor }[] = [
+  { id: 'appearance', label: 'Appearance', icon: Monitor },
+  { id: 'tunnel',     label: 'Tunnel',     icon: Wifi },
+  { id: 'account',    label: 'Account',    icon: Shield },
+]
+
+type Props = {
+  theme: 'light' | 'dark'
+  onToggleTheme: () => void
+  session: ClientSession
+  onVerify: () => void
+  onUpgrade: () => void
+  onCopyClientId: () => void
+  verifying: boolean
+  gauthEnabled: boolean
+}
+
+const TIER_LABEL: Record<string, string> = {
+  anonymous: 'Guest · 100 MB',
+  verified: 'Verified · 1 GB free',
+  pro: 'Pro · 5 GB',
+  pro_plus: 'Pro+ · 10 GB',
+}
+
+export default function SettingsPage({ theme, onToggleTheme, session, onVerify, onUpgrade, onCopyClientId, verifying, gauthEnabled }: Props) {
+  const [active, setActive] = useState<SettingsSection>('appearance')
+  const tier = tierOf(session)
+
+  return (
+    <div className="ps-main">
+      <div className="ps-page-header animate-fade-down">
+        <div>
+          <h1 className="ps-page-title">Settings</h1>
+          <p className="ps-page-subtitle">Preferences for this client</p>
+        </div>
+      </div>
+
+      <div className="ps-page-content" style={{ flex: 1, overflow: 'hidden', padding: '16px 28px 28px' }}>
+        <div className="ps-settings-layout ps-card animate-fade-up" style={{ height: 'calc(100vh - 160px)' }}>
+          <div className="ps-settings-nav">
+            {sections.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                className={`ps-settings-nav-item ${active === id ? 'active' : ''}`}
+                onClick={() => setActive(id)}
+              >
+                <Icon size={14} strokeWidth={1.8} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="ps-settings-content">
+            {active === 'appearance' && (
+              <div className="ps-settings-section animate-fade-in">
+                <div className="ps-settings-section-title">Appearance</div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Theme</div>
+                    <div className="ps-settings-row-desc">Dark and light modes for this device</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className={`ps-btn ps-btn-sm ${theme === 'dark' ? 'ps-btn-primary' : 'ps-btn-secondary'}`}
+                      onClick={() => theme !== 'dark' && onToggleTheme()}
+                    >
+                      Dark
+                    </button>
+                    <button
+                      className={`ps-btn ps-btn-sm ${theme === 'light' ? 'ps-btn-primary' : 'ps-btn-secondary'}`}
+                      onClick={() => theme !== 'light' && onToggleTheme()}
+                    >
+                      Light
+                    </button>
+                  </div>
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Manage billing</div>
+                    <div className="ps-settings-row-desc">View plans, usage, invoices, and renewal status in the web account.</div>
+                  </div>
+                  <a className="ps-btn ps-btn-secondary ps-btn-sm" href={`https://myapp.${ROOT_DOMAIN}/account?clientId=${encodeURIComponent(session.id)}`} target="_blank" rel="noreferrer">
+                    Open account
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {active === 'tunnel' && (
+              <div className="ps-settings-section animate-fade-in">
+                <div className="ps-settings-section-title">Tunnel</div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Reconnect</div>
+                    <div className="ps-settings-row-desc">The client reconnects automatically if the socket drops</div>
+                  </div>
+                  <span className="ps-badge ps-badge-green">On</span>
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">API</div>
+                    <div className="ps-settings-row-desc">Control plane used by this build</div>
+                  </div>
+                  <span style={{ fontFamily: 'var(--mono-font)', fontSize: 11.5, color: 'var(--text-soft)' }}>
+                    {API_BASE_URL.replace(/^https?:\/\//, '')}
+                  </span>
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Root domain</div>
+                    <div className="ps-settings-row-desc">Public hostname suffix for tunnels</div>
+                  </div>
+                  <span style={{ fontFamily: 'var(--mono-font)', fontSize: 11.5, color: 'var(--text-soft)' }}>
+                    {ROOT_DOMAIN}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {active === 'account' && (
+              <div className="ps-settings-section animate-fade-in">
+                <div className="ps-settings-section-title">Account</div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Plan</div>
+                    <div className="ps-settings-row-desc">Current bandwidth tier for this identity</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="ps-badge ps-badge-gray" style={{ textTransform: 'capitalize' }}>{TIER_LABEL[tier] ?? session.plan}</span>
+                    {tier !== 'pro' && <button className="ps-btn ps-btn-primary ps-btn-sm" onClick={onUpgrade}>Upgrade</button>}
+                  </div>
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Google verification</div>
+                    <div className="ps-settings-row-desc">
+                      {session.ownerEmail ? `Linked as ${session.ownerEmail}` : 'Unlock 1 GB free + auth wall'}
+                    </div>
+                  </div>
+                  {session.ownerEmail ? (
+                    <span className="ps-badge ps-badge-green">Verified</span>
+                  ) : !gauthEnabled ? (
+                    <span className="ps-badge ps-badge-gray">Unavailable</span>
+                  ) : (
+                    <button
+                      className="ps-btn ps-btn-primary ps-btn-sm"
+                      onClick={onVerify}
+                      disabled={verifying}
+                    >
+                      {verifying ? 'Check browser…' : 'Verify'}
+                    </button>
+                  )}
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Client ID</div>
+                    <div className="ps-settings-row-desc">Stored locally on this machine</div>
+                  </div>
+                  <button className="ps-copy-value" onClick={onCopyClientId} title="Copy client ID">
+                    {session.id}
+                  </button>
+                </div>
+                <div className="ps-settings-row">
+                  <div className="ps-settings-row-info">
+                    <div className="ps-settings-row-label">Auth wall</div>
+                    <div className="ps-settings-row-desc">Google sign-in required for visitors</div>
+                  </div>
+                  <span className="ps-badge ps-badge-gray">{session.requireAuth ? 'Enabled' : 'Off'}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
