@@ -148,6 +148,7 @@ ipcMain.handle('portshare:start-tunnel', async (event, config) => {
   currentConfig = config;
   activeTunnel = connectTunnel({
     tunnelUrl: config.tunnelUrl,
+    tunnelType: config.tunnelType,
     getPort: () => config.port,
     onStateChange: (state, msg) => {
       if (mainWindow) {

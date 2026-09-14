@@ -6,6 +6,7 @@ type CreateTunnelArgs = {
   apiBaseUrl: string
   clientId: string
   tunnelId?: string
+  tunnelType?: string
   portRef: React.MutableRefObject<number | null>
   onStateChange: (state: ConnectionState, message?: string) => void
   onLogEntry: (entry: RequestLogEntry) => void
@@ -111,7 +112,7 @@ async function proxyToLocal(port: number, request: WireRequest, localHeaders: Re
   return { status: response.status, headers, body: responseBody }
 }
 
-export function createTunnelConnection({ apiBaseUrl, clientId, tunnelId, portRef, onStateChange, onLogEntry, routesRef }: CreateTunnelArgs) {
+export function createTunnelConnection({ apiBaseUrl, clientId, tunnelId, tunnelType, portRef, onStateChange, onLogEntry, routesRef }: CreateTunnelArgs) {
   const protocol = apiBaseUrl.startsWith('https') ? 'wss' : 'ws'
   const tunnelParam = tunnelId ? `&tunnelId=${encodeURIComponent(tunnelId)}` : ''
   // proto=3 signals Yamux over WebSocket
@@ -128,6 +129,7 @@ export function createTunnelConnection({ apiBaseUrl, clientId, tunnelId, portRef
     
     window.portshare.startTunnel({
       tunnelUrl,
+      tunnelType,
       port: portRef.current ?? 3000
     })
     

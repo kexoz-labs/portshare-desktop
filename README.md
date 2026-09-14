@@ -29,4 +29,4 @@ npm run dev
 
 ## License
 
-MIT © [Kexoz Labs](https://github.com/kexoz-labs)
+MIT © [Kexoz Labs](https://github.com/kexoz)

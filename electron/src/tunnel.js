@@ -5,7 +5,7 @@ const net = require('node:net');
 let currentSession = null;
 let currentWs = null;
 
-function connectTunnel({ tunnelUrl, getPort, onLogEntry, onStateChange }) {
+function connectTunnel({ tunnelUrl, tunnelType, getPort, onLogEntry, onStateChange }) {
   if (currentSession) {
     currentSession.close();
   }
@@ -48,6 +48,40 @@ function connectTunnel({ tunnelUrl, getPort, onLogEntry, onStateChange }) {
       if (!port) {
         stream.close();
         return;
+      }
+
+      if (tunnelType === 'udp') {
+        const dgram = require('node:dgram');
+        const localSocket = dgram.createSocket('udp4');
+        
+        let headerBuffer = Buffer.alloc(0);
+        stream.on('data', (data) => {
+          headerBuffer = Buffer.concat([headerBuffer, data]);
+          while (headerBuffer.length >= 2) {
+            const len = headerBuffer.readUInt16BE(0);
+            if (headerBuffer.length >= 2 + len) {
+              const packet = headerBuffer.slice(2, 2 + len);
+              headerBuffer = headerBuffer.slice(2 + len);
+              localSocket.send(packet, port, '127.0.0.1');
+            } else {
+              break;
+            }
+          }
+        });
+
+        localSocket.on('message', (msg) => {
+          const frame = Buffer.alloc(2 + msg.length);
+          frame.writeUInt16BE(msg.length, 0);
+          msg.copy(frame, 2);
+          stream.write(frame);
+        });
+
+        stream.on('close', () => localSocket.close());
+        localSocket.on('close', () => stream.close());
+        localSocket.on('error', () => stream.close());
+        stream.on('error', () => localSocket.close());
+
+        return; // done for UDP
       }
       
       const localSocket = net.connect(port, '127.0.0.1', () => {

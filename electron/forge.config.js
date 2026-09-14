@@ -13,7 +13,7 @@ module.exports = {
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: 'portshare',
+        name: 'portshare-desktop',
         setupExe: 'PortShare-Setup.exe',
       },
     },
@@ -25,7 +25,7 @@ module.exports = {
       name: '@electron-forge/maker-deb',
       config: {
         options: {
-          name: 'portshare',
+          name: 'portshare-desktop',
           bin: 'portshare',
         },
       },
@@ -34,7 +34,7 @@ module.exports = {
       name: '@electron-forge/maker-rpm',
       config: {
         options: {
-          name: 'portshare',
+          name: 'portshare-desktop',
           bin: 'portshare',
         },
       },
@@ -62,7 +62,7 @@ module.exports = {
       name: '@electron-forge/publisher-github',
       config: {
         repository: {
-          owner: 'kexoz-labs',
+          owner: 'kexoz',
           name: 'portshare-desktop'
         },
         prerelease: false,
