@@ -1,0 +1,159 @@
+const WebSocket = require('ws');
+const { YamuxSession } = require('yamux-js');
+const net = require('node:net');
+
+let currentSession = null;
+let currentWs = null;
+
+function connectTunnel({ tunnelUrl, getPort, onLogEntry, onStateChange }) {
+  if (currentSession) {
+    currentSession.close();
+  }
+  if (currentWs) {
+    currentWs.close();
+  }
+
+  const ws = new WebSocket(tunnelUrl);
+  currentWs = ws;
+  ws.binaryType = 'arraybuffer';
+  
+  // Custom WebSocket wrapper that looks like a Node stream
+  const wsStream = {
+    write(data) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    },
+    onData(cb) {
+      ws.on('message', (data) => cb(new Uint8Array(data)));
+    },
+    onClose(cb) {
+      ws.on('close', cb);
+    },
+    close() {
+      ws.close();
+    }
+  };
+
+  ws.on('open', () => {
+    onStateChange('connected', 'Yamux tunnel connected');
+    
+    // Create the Yamux session
+    // Since the server acts as Yamux Client, the desktop acts as Yamux Server
+    const session = new YamuxSession(wsStream, { isClient: false });
+    currentSession = session;
+    
+    session.on('stream', (stream) => {
+      const port = getPort();
+      if (!port) {
+        stream.close();
+        return;
+      }
+      
+      const localSocket = net.connect(port, '127.0.0.1', () => {
+        // Stream opened successfully
+      });
+      
+      let reqLogId = null;
+      let reqStartTime = null;
+
+      // Pipe data from Yamux stream to Local Socket
+      let firstReqChunk = true;
+      stream.on('data', (data) => {
+        if (firstReqChunk && onLogEntry) {
+          firstReqChunk = false;
+          try {
+            const text = data.toString('utf8');
+            if (/^(GET|POST|PUT|DELETE|OPTIONS|PATCH|HEAD) /.test(text)) {
+              const lines = text.split('\r\n');
+              const [method, path] = lines[0].split(' ');
+              const headers = {};
+              let bodyStr = '';
+              for (let i = 1; i < lines.length; i++) {
+                if (lines[i] === '') {
+                  bodyStr = lines.slice(i + 1).join('\r\n');
+                  break;
+                }
+                const [k, ...v] = lines[i].split(':');
+                if (k && v.length) headers[k.trim().toLowerCase()] = v.join(':').trim();
+              }
+              reqLogId = Math.random().toString(36).substring(2, 11);
+              reqStartTime = Date.now();
+              onLogEntry({
+                id: reqLogId,
+                method,
+                path,
+                status: null,
+                timestamp: new Date().toISOString(),
+                durationMs: null,
+                headers,
+                body: bodyStr.substring(0, 10000)
+              });
+            }
+          } catch (e) {}
+        }
+        localSocket.write(data);
+      });
+      
+      let firstRespChunk = true;
+      localSocket.on('data', (data) => {
+        if (firstRespChunk && reqLogId && onLogEntry) {
+          firstRespChunk = false;
+          try {
+            const text = data.toString('utf8');
+            if (text.startsWith('HTTP/')) {
+              const lines = text.split('\r\n');
+              const statusPart = lines[0].split(' ')[1];
+              const status = parseInt(statusPart, 10);
+              const headers = {};
+              let bodyStr = '';
+              for (let i = 1; i < lines.length; i++) {
+                if (lines[i] === '') {
+                  bodyStr = lines.slice(i + 1).join('\r\n');
+                  break;
+                }
+                const [k, ...v] = lines[i].split(':');
+                if (k && v.length) headers[k.trim().toLowerCase()] = v.join(':').trim();
+              }
+              onLogEntry({
+                id: reqLogId, // match the request ID
+                status: status || 200,
+                durationMs: Date.now() - reqStartTime,
+                responseHeaders: headers,
+                responseBody: bodyStr.substring(0, 10000)
+              });
+            }
+          } catch (e) {}
+        }
+        stream.write(data);
+      });
+      
+      stream.on('close', () => localSocket.destroy());
+      localSocket.on('close', () => stream.close());
+      localSocket.on('error', () => stream.close());
+      stream.on('error', () => localSocket.destroy());
+    });
+  });
+  
+  ws.on('close', () => {
+    if (currentSession) {
+      currentSession = null;
+      onStateChange('disconnected', 'Yamux tunnel disconnected');
+    }
+  });
+  
+  ws.on('error', (err) => {
+    console.error('WebSocket Error:', err);
+  });
+
+  return {
+    close() {
+      if (currentWs) currentWs.close();
+      if (currentSession) currentSession.close();
+      currentWs = null;
+      currentSession = null;
+    }
+  }
+}
+
+module.exports = { connectTunnel };

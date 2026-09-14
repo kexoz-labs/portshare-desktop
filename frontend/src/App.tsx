@@ -1,0 +1,840 @@
+import './styles/tokens.css'
+import './styles/base.css'
+import './styles/animations.css'
+
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+import { Toaster, toast } from 'react-hot-toast'
+import axios from 'axios'
+
+import {
+  type ClientSession, type ConnectionState, type FlowStep, type PersistentTunnel,
+  API_BASE_URL, ROOT_DOMAIN,
+  ensureClientIdentity, checkSubdomainAvailability, claimSubdomain,
+  updateExposedPort, updateCustomDomain, updateClientAuth, fetchClientStats,
+  googleLinkLoginUrl, fetchLinkStatus, tierOf, createCheckoutSession, updateClientRoutes,
+  listTunnels, createTunnel, updateTunnel, deleteTunnel
+} from './lib/api'
+import { clearClientId, getClientId, setClientId } from './lib/storage'
+import { normalizeSubdomain, extractError } from './lib/utils'
+import { createTunnelConnection } from './lib/tunnel'
+import { useTheme } from './hooks/useTheme'
+import { useRequestLog } from './hooks/useRequestLog'
+
+import AppShell from './components/layout/AppShell'
+import Sidebar from './components/layout/Sidebar'
+import FeedbackBanner from './components/ui/FeedbackBanner'
+import LoadingScreen from './components/screens/LoadingScreen'
+import GateScreen from './components/screens/GateScreen'
+import SubdomainScreen from './components/screens/SubdomainScreen'
+import VerifyBanner from './components/dashboard/VerifyBanner'
+import DashboardPage from './components/pages/DashboardPage'
+import TunnelsPage from './components/pages/TunnelsPage'
+import RequestsPage from './components/pages/RequestsPage'
+import DomainsPage from './components/pages/DomainsPage'
+import SettingsPage from './components/pages/SettingsPage'
+
+type Page = 'dashboard' | 'tunnels' | 'requests' | 'domains' | 'settings'
+
+export default function App() {
+  const [step, setStep] = useState<FlowStep>('loading')
+  const [activePage, setActivePage] = useState<Page>('dashboard')
+  const [session, setSession] = useState<ClientSession | null>(null)
+
+  const [subdomainInput, setSubdomainInput] = useState('')
+  const [portInput, setPortInput] = useState('')
+  const [domainInput, setDomainInput] = useState('')
+
+  const [statusMessage, setStatusMessage] = useState('Starting secure tunnel client...')
+  const [infoMessage, setInfoMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isBusy, setIsBusy] = useState(false)
+  const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [connState, setConnState] = useState<ConnectionState>('idle')
+  const [gauthEnabled, setGauthEnabled] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [connectedAt, setConnectedAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const [showNewTunnel, setShowNewTunnel] = useState(false)
+  const [autoStart, setAutoStart] = useState(() => window.localStorage.getItem('portshare-autostart') === 'true')
+  const [persistentTunnels, setPersistentTunnels] = useState<PersistentTunnel[]>([])
+  const [selectedTunnelId, setSelectedTunnelId] = useState<string | null>(null)
+  const [routeRules, setRouteRules] = useState<Array<{ path: string; port: number }>>(() => {
+    try {
+      const saved = window.localStorage.getItem('portshare-route-rules')
+      return saved ? JSON.parse(saved) as Array<{ path: string; port: number }> : []
+    } catch {
+      return []
+    }
+  })
+  const [portListening, setPortListening] = useState<boolean | null>(null)
+  const [routePortStatus, setRoutePortStatus] = useState<Record<number, boolean | null>>({})
+  const [bytesIn, setBytesIn] = useState(0)
+  const [bytesOut, setBytesOut] = useState(0)
+  const [dailyUsage, setDailyUsage] = useState<import('./lib/api').UsagePoint[]>([])
+  const [monthlyUsage, setMonthlyUsage] = useState<import('./lib/api').UsagePoint[]>([])
+
+  const { theme, toggleTheme } = useTheme()
+  const { requestLog, totalRequests, retention, setRetention, addLogEntry, clearLog } = useRequestLog()
+
+  useEffect(() => {
+    if (!infoMessage && !errorMessage) return
+    const timer = window.setTimeout(() => {
+      setInfoMessage('')
+      setErrorMessage('')
+    }, errorMessage ? 6000 : 4000)
+    return () => window.clearTimeout(timer)
+  }, [infoMessage, errorMessage])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable || target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+      const pages: Record<string, Page> = { '1': 'dashboard', '2': 'tunnels', '3': 'requests', '4': 'domains', '5': 'settings' }
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        setActivePage('tunnels')
+        setShowNewTunnel(true)
+        return
+      }
+      const page = pages[event.key]
+      if (page) {
+        event.preventDefault()
+        setActivePage(page)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const tunnelPort = useRef<number | null>(null)
+  const routesRef = useRef<Array<{ path: string; port: number }>>([])
+  const tunnelClose = useRef<(() => void) | null>(null)
+  const tunnelConnections = useRef(new Map<string, { close: () => void; portRef: { current: number | null }; routesRef: { current: Array<{ path: string; port: number }> } }>())
+  const verifyAttempt = useRef(0)
+  const lastPortListening = useRef<boolean | null>(null)
+
+  const openTunnelConnection = useCallback((clientId: string, tunnelId?: string, port?: number, routes?: Array<{ path: string; port: number }>) => {
+    const key = tunnelId ?? 'legacy'
+    tunnelConnections.current.get(key)?.close()
+    const portRef = tunnelId ? { current: port ?? null } : tunnelPort
+    const connectionRoutesRef = tunnelId ? { current: routes ?? [] } : routesRef
+    const tunnel = createTunnelConnection({
+      apiBaseUrl: API_BASE_URL,
+      clientId,
+      tunnelId,
+      portRef,
+      onStateChange: (state, message) => {
+        setConnState(state)
+        if (state === 'connected') setConnectedAt(Date.now())
+        if (state === 'disconnected') setConnectedAt(null)
+        if (message) setStatusMessage(message)
+      },
+      onLogEntry: addLogEntry,
+      routesRef: connectionRoutesRef,
+    })
+    tunnelConnections.current.set(key, { close: tunnel.close, portRef, routesRef: connectionRoutesRef })
+    tunnelClose.current = tunnel.close
+  }, [addLogEntry])
+
+  const publicUrl = useMemo(() => {
+    if (!session?.subdomain) return ''
+    return `https://${session.subdomain}.${ROOT_DOMAIN}`
+  }, [session])
+
+  const uptimeSeconds = connectedAt && connState === 'connected'
+    ? Math.max(0, Math.floor((now - connectedAt) / 1000))
+    : 0
+
+  useEffect(() => {
+    routesRef.current = routeRules
+    window.localStorage.setItem('portshare-route-rules', JSON.stringify(routeRules))
+    if (session?.id && step === 'dashboard') {
+      void updateClientRoutes(session.id, routeRules)
+      if (selectedTunnelId && routeRules.length > 0) {
+        const selected = persistentTunnels.find(tunnel => tunnel.id === selectedTunnelId)
+        if (selected) {
+          const connection = tunnelConnections.current.get(selectedTunnelId)
+          if (connection) connection.routesRef.current = routeRules
+          void updateTunnel(session.id, { ...selected, pathRoutes: routeRules })
+        }
+      }
+    }
+  }, [routeRules, session?.id, selectedTunnelId, persistentTunnels, step])
+
+  useEffect(() => {
+    if (window.portshare?.updateTray) {
+      window.portshare.updateTray(persistentTunnels)
+    }
+  }, [persistentTunnels, connState])
+
+  useEffect(() => {
+    if (window.portshare?.setAutoStart) {
+      window.portshare.setAutoStart(autoStart)
+    }
+    window.localStorage.setItem('portshare-autostart', String(autoStart))
+  }, [autoStart])
+
+  const checkListening = useCallback(async (port: number | null) => {
+    if (!port) {
+      setPortListening(null)
+      return
+    }
+    if (window.portshare?.checkPort) {
+      const listening = await window.portshare.checkPort(port)
+      setPortListening(listening)
+      if (lastPortListening.current === true && !listening) {
+        void window.portshare.notify?.({
+          title: 'PortShare: local app offline',
+          body: `localhost:${port} is no longer accepting connections.`,
+        })
+      }
+      lastPortListening.current = listening
+      return
+    }
+    setPortListening(null)
+  }, [])
+
+  useEffect(() => {
+    if (step !== 'dashboard') return
+    void checkListening(tunnelPort.current)
+    const id = window.setInterval(() => void checkListening(tunnelPort.current), 5000)
+    return () => window.clearInterval(id)
+  }, [checkListening, step])
+
+  useEffect(() => {
+    if (step !== 'dashboard' || !window.portshare?.checkPort) return
+    const refreshRoutePorts = async () => {
+      const ports = [...new Set(routeRules.map(rule => rule.port).filter(port => Number.isInteger(port) && port > 0))]
+      const results = await Promise.all(ports.map(async port => [port, await window.portshare!.checkPort(port)] as const))
+      setRoutePortStatus(Object.fromEntries(results))
+    }
+    void refreshRoutePorts()
+    const id = window.setInterval(() => void refreshRoutePorts(), 5000)
+    return () => window.clearInterval(id)
+  }, [routeRules, step])
+
+  useEffect(() => {
+    if (connState !== 'connected') return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [connState])
+
+  useEffect(() => {
+    if (!session?.id || step !== 'dashboard') return
+    let cancelled = false
+
+    const refreshBandwidth = async () => {
+      try {
+        const stats = await fetchClientStats(session.id)
+        if (cancelled) return
+        setSession(cur => {
+          if (!cur) return cur
+          const used = stats.bandwidthUsed ?? cur.bandwidthUsed
+          const limit = stats.bandwidthLimit ?? cur.bandwidthLimit
+          if (used === cur.bandwidthUsed && limit === cur.bandwidthLimit) return cur
+          return { ...cur, bandwidthUsed: used, bandwidthLimit: limit }
+        })
+        setBytesIn(stats.bytesIn ?? 0)
+        setBytesOut(stats.bytesOut ?? 0)
+        setDailyUsage(stats.dailyUsage ?? [])
+        setMonthlyUsage(stats.monthlyUsage ?? [])
+      } catch {
+        // Keep last known values if stats briefly fail.
+      }
+    }
+
+    void refreshBandwidth()
+    const id = window.setInterval(refreshBandwidth, 3000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [session?.id, step])
+
+  const bootstrapClient = useCallback(async (): Promise<void> => {
+    setStep('loading')
+    setIsBusy(true)
+    setErrorMessage('')
+    setInfoMessage('')
+    setConnState('connecting')
+
+    try {
+      const storedId = getClientId()
+      setStatusMessage(storedId ? 'Validating saved client identity...' : 'Generating a new client identity...')
+
+      const nextSession = await ensureClientIdentity(storedId)
+      axios.defaults.headers.common['X-PortShare-Client-ID'] = nextSession.id
+      setClientId(nextSession.id)
+      setSession(nextSession)
+      const savedTunnels = await listTunnels(nextSession.id).catch(() => [])
+      const selected = savedTunnels.find(tunnel => tunnel.active) ?? savedTunnels[0]
+      setPersistentTunnels(savedTunnels)
+      setSelectedTunnelId(selected?.id ?? null)
+      const selectedPort = selected?.port ?? nextSession.port
+      const selectedRoutes = selected?.pathRoutes?.length ? selected.pathRoutes : nextSession.pathRoutes
+      setPortInput(selectedPort ? String(selectedPort) : '')
+      setSubdomainInput(selected?.subdomain ?? nextSession.subdomain)
+      setDomainInput(selected?.customDomain ?? nextSession.customDomain)
+      setRouteRules(selectedRoutes.length ? selectedRoutes : routesRef.current)
+      tunnelPort.current = selectedPort
+      routesRef.current = selectedRoutes
+      void checkListening(selectedPort)
+
+      const activeTunnels = savedTunnels.filter(tunnel => tunnel.active)
+      if (activeTunnels.length > 0) {
+        activeTunnels.forEach(tunnel => openTunnelConnection(nextSession.id, tunnel.id, tunnel.port, tunnel.pathRoutes))
+      } else {
+        openTunnelConnection(nextSession.id, selected?.id, selected?.port, selected?.pathRoutes)
+      }
+
+      // Best-effort: needed by the verify gate and the auth-wall toggle.
+      try {
+        const { data: authStatus } = await axios.get<{ enabled: boolean }>(`${API_BASE_URL}/auth/google/status`)
+        setGauthEnabled(authStatus.enabled)
+      } catch {
+        setGauthEnabled(false)
+      }
+
+      if (nextSession.subdomain.length > 0) {
+        setStep('dashboard')
+        setInfoMessage('Identity loaded. Set a local port to start forwarding.')
+      } else if (!nextSession.ownerEmail) {
+        // Brand-new identity: offer Google verification before subdomain setup.
+        setStep('gate')
+        setInfoMessage('Identity created. Verify with Google or continue as guest.')
+      } else {
+        setStep('subdomain')
+        setInfoMessage('Identity created. Reserve your subdomain to continue.')
+      }
+    } catch (error) {
+      setConnState('disconnected')
+      setErrorMessage(extractError(error))
+      setStatusMessage('Could not reach the PortShare API.')
+    } finally {
+      setIsBusy(false)
+    }
+  }, [checkListening, openTunnelConnection])
+
+  useEffect(() => {
+    void bootstrapClient()
+    return () => {
+      verifyAttempt.current += 1
+      tunnelConnections.current.forEach(connection => connection.close())
+      tunnelConnections.current.clear()
+      tunnelClose.current?.()
+      tunnelClose.current = null
+    }
+  }, [bootstrapClient])
+
+  /** Opens Google sign-in in the browser, then polls until the link lands. */
+  const startGoogleVerify = useCallback(async (): Promise<void> => {
+    if (!session || verifying) return
+    if (!gauthEnabled) {
+      setErrorMessage('Google verification is not enabled on this server.')
+      return
+    }
+    const attempt = ++verifyAttempt.current
+    setVerifying(true)
+    setErrorMessage('')
+    setInfoMessage('Complete Google sign-in in your browser…')
+    window.open(googleLinkLoginUrl(session.id), '_blank', 'noopener')
+    const deadline = Date.now() + 5 * 60 * 1000
+    try {
+      for (;;) {
+        await new Promise(r => setTimeout(r, 2000))
+        if (verifyAttempt.current !== attempt) return
+        if (Date.now() > deadline) {
+          setErrorMessage('Verification timed out. Please try again.')
+          return
+        }
+        try {
+          const status = await fetchLinkStatus(session.id)
+          if (verifyAttempt.current !== attempt) return
+          if (status.linked) {
+            const fresh = await ensureClientIdentity(session.id)
+            if (verifyAttempt.current !== attempt) return
+            setClientId(fresh.id)
+            setSession(fresh)
+            setPortInput(fresh.port ? String(fresh.port) : '')
+            setSubdomainInput(fresh.subdomain)
+            setDomainInput(fresh.customDomain)
+            toast.success('Verified! 1 GB bandwidth unlocked')
+            setInfoMessage('Google linked — 1 GB bandwidth unlocked.')
+            setStep(cur => cur === 'gate' ? (fresh.subdomain ? 'dashboard' : 'subdomain') : cur)
+            return
+          }
+        } catch {
+          // Transient failure — keep polling until the deadline.
+        }
+      }
+    } finally {
+      if (verifyAttempt.current === attempt) setVerifying(false)
+    }
+  }, [session, verifying, gauthEnabled])
+
+  const skipGate = useCallback(() => {
+    verifyAttempt.current += 1
+    setVerifying(false)
+    setInfoMessage('Continuing as guest with 100 MB bandwidth. Verify anytime for 1 GB free.')
+    setStep(cur => {
+      if (cur !== 'gate') return cur
+      return session?.subdomain ? 'dashboard' : 'subdomain'
+    })
+  }, [session?.subdomain])
+
+  const applyPort = async (port: number) => {
+    if (!session) return
+    setIsBusy(true); setErrorMessage(''); setInfoMessage('Updating exposed port...')
+    try {
+      const next = await updateExposedPort(session.id, port)
+      tunnelPort.current = next
+      setSession(cur => cur ? { ...cur, port: next } : cur)
+      setPortInput(String(next))
+      void checkListening(next)
+      if (selectedTunnelId) {
+        setPersistentTunnels(current => current.map(tunnel => tunnel.id === selectedTunnelId ? { ...tunnel, port: next } : tunnel))
+        const connection = tunnelConnections.current.get(selectedTunnelId)
+        if (connection) connection.portRef.current = next
+        const selected = persistentTunnels.find(tunnel => tunnel.id === selectedTunnelId)
+        if (selected) void updateTunnel(session.id, { ...selected, port: next })
+      }
+      setInfoMessage(`localhost:${next} is now routed to your public URL.`)
+      toast.success(`Forwarding localhost:${next}`)
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally { setIsBusy(false) }
+  }
+
+  const handleSubdomainSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!session) return
+    const name = normalizeSubdomain(subdomainInput)
+    if (name.length < 3 || name.length > 32) {
+      setErrorMessage('Subdomain must be 3–32 characters using letters, numbers, or hyphens.')
+      return
+    }
+    setIsBusy(true); setErrorMessage(''); setInfoMessage('Checking subdomain availability...')
+    try {
+      const availability = await checkSubdomainAvailability(name)
+      if (!availability.available) {
+        setErrorMessage(availability.reserved
+          ? 'That subdomain is reserved for PortShare infrastructure. Try another one.'
+          : 'That subdomain is already taken. Try another one.')
+        return
+      }
+      await claimSubdomain(session.id, name)
+      setSession(cur => cur ? { ...cur, subdomain: name } : cur)
+      setStep('dashboard')
+      setInfoMessage('Subdomain reserved. Set a local port to go live.')
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally { setIsBusy(false) }
+  }
+
+  const handlePortSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const p = Number(portInput)
+    if (!Number.isInteger(p) || p < 1 || p > 65535) {
+      setErrorMessage('Enter a valid TCP port between 1 and 65535.')
+      return
+    }
+    await applyPort(p)
+  }
+
+  const handleDomainSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!session || !domainInput.trim()) return
+    setIsBusy(true); setErrorMessage(''); setInfoMessage('Mapping your domain...')
+    try {
+      const customDomain = await updateCustomDomain(session.id, domainInput.trim())
+      setSession(cur => cur ? { ...cur, customDomain } : cur)
+      setDomainInput(customDomain)
+      if (selectedTunnelId) {
+        const selected = persistentTunnels.find(tunnel => tunnel.id === selectedTunnelId)
+        if (selected) {
+          const updated = await updateTunnel(session.id, { ...selected, customDomain })
+          setPersistentTunnels(current => current.map(tunnel => tunnel.id === updated.id ? updated : tunnel))
+        }
+      }
+      setInfoMessage('Domain mapped. Add a CNAME pointing to your PortShare hostname.')
+      toast.success('Custom domain mapped')
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally { setIsBusy(false) }
+  }
+
+  const handleAuthToggle = async () => {
+    if (!session) return
+    const next = !session.requireAuth
+    setIsBusy(true); setErrorMessage(''); setInfoMessage('')
+    try {
+      const result = await updateClientAuth(session.id, next)
+      setSession(cur => cur ? { ...cur, requireAuth: result.requireAuth } : cur)
+      if (selectedTunnelId) {
+        const selected = persistentTunnels.find(tunnel => tunnel.id === selectedTunnelId)
+        if (selected) {
+          const updated = await updateTunnel(session.id, { ...selected, requireAuth: result.requireAuth })
+          setPersistentTunnels(current => current.map(tunnel => tunnel.id === updated.id ? updated : tunnel))
+        }
+      }
+      setGauthEnabled(result.gauthEnabled)
+      setInfoMessage(result.requireAuth
+        ? 'Google Auth wall enabled — visitors must sign in with Google.'
+        : 'Google Auth wall disabled — tunnel is publicly accessible.')
+      toast.success(result.requireAuth ? 'Auth wall enabled' : 'Auth wall disabled')
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally { setIsBusy(false) }
+  }
+
+  const selectPersistentTunnel = (tunnel: PersistentTunnel) => {
+    setSelectedTunnelId(tunnel.id)
+    setSession(current => current ? {
+      ...current,
+      subdomain: tunnel.subdomain,
+      port: tunnel.port,
+      customDomain: tunnel.customDomain,
+      requireAuth: tunnel.requireAuth,
+      pathRoutes: tunnel.pathRoutes,
+    } : current)
+    setSubdomainInput(tunnel.subdomain)
+    setPortInput(String(tunnel.port))
+    setDomainInput(tunnel.customDomain)
+    setRouteRules(tunnel.pathRoutes)
+    tunnelPort.current = tunnel.port
+    routesRef.current = tunnel.pathRoutes
+    const connection = tunnelConnections.current.get(tunnel.id)
+    if (connection) {
+      connection.portRef.current = tunnel.port
+      connection.routesRef.current = tunnel.pathRoutes
+      tunnelClose.current = connection.close
+    }
+    void checkListening(tunnel.port)
+    setInfoMessage(`Selected ${tunnel.subdomain}.${ROOT_DOMAIN}.`)
+  }
+
+  const startPersistentTunnel = async (tunnel: PersistentTunnel) => {
+    if (!session) return
+    setIsBusy(true)
+    try {
+      selectPersistentTunnel(tunnel)
+      const updated = await updateTunnel(session.id, { ...tunnel, active: true })
+      setPersistentTunnels(current => current.map(item => item.id === updated.id ? updated : item))
+      openTunnelConnection(session.id, updated.id, updated.port, updated.pathRoutes)
+      setInfoMessage(`Starting ${updated.subdomain}.${ROOT_DOMAIN}...`)
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const stopPersistentTunnel = async (tunnel: PersistentTunnel) => {
+    if (!session) return
+    setIsBusy(true)
+    try {
+      await updateTunnel(session.id, { ...tunnel, active: false })
+      setPersistentTunnels(current => current.map(item => item.id === tunnel.id ? { ...item, active: false } : item))
+      tunnelConnections.current.get(tunnel.id)?.close()
+      tunnelConnections.current.delete(tunnel.id)
+      if (tunnel.id === selectedTunnelId) {
+        tunnelClose.current = null
+        setConnState('idle')
+        setConnectedAt(null)
+      }
+      setInfoMessage(`${tunnel.subdomain}.${ROOT_DOMAIN} is stopped.`)
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const removePersistentTunnel = async (tunnel: PersistentTunnel) => {
+    if (!session || !window.confirm(`Delete ${tunnel.subdomain}.${ROOT_DOMAIN}?`)) return
+    setIsBusy(true)
+    try {
+      await deleteTunnel(session.id, tunnel.id)
+      if (tunnel.id === selectedTunnelId) {
+        tunnelClose.current = null
+        setConnState('idle')
+        setSelectedTunnelId(null)
+      }
+      tunnelConnections.current.get(tunnel.id)?.close()
+      tunnelConnections.current.delete(tunnel.id)
+      setPersistentTunnels(current => current.filter(item => item.id !== tunnel.id))
+      setInfoMessage('Tunnel deleted.')
+    } catch (err) {
+      setErrorMessage(extractError(err))
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const exportTunnelConfiguration = () => {
+    if (!session) return
+    const payload = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tunnels: persistentTunnels.map(({ subdomain, customDomain, port, requireAuth, pathRoutes }) => ({ subdomain, customDomain, port, requireAuth, pathRoutes })) }, null, 2)
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'portshare-tunnels.json'
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success('Tunnel configuration exported')
+  }
+
+  const importTunnelConfiguration = async (file: File) => {
+    if (!session) return
+    setIsBusy(true)
+    try {
+      const parsed = JSON.parse(await file.text()) as { tunnels?: Array<Partial<PersistentTunnel>> }
+      const imported = parsed.tunnels ?? []
+      if (!imported.length) throw new Error('The file does not contain any tunnels.')
+      const created = [] as PersistentTunnel[]
+      for (const tunnel of imported) {
+        const port = tunnel.port
+        if (!tunnel.subdomain || typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) continue
+        created.push(await createTunnel(session.id, {
+          subdomain: tunnel.subdomain,
+          customDomain: tunnel.customDomain ?? '',
+          port,
+          requireAuth: tunnel.requireAuth === true,
+          pathRoutes: tunnel.pathRoutes?.length ? tunnel.pathRoutes : [{ path: '/', port }],
+        }))
+      }
+      if (!created.length) throw new Error('No valid tunnel configurations were found.')
+      setPersistentTunnels(current => [...current, ...created])
+      toast.success(`${created.length} tunnel${created.length === 1 ? '' : 's'} imported`)
+    } catch (err) {
+      toast.error(extractError(err))
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  const handleCopyUrl = async () => {
+    if (!publicUrl) return
+    try {
+      await navigator.clipboard.writeText(publicUrl)
+      setCopyFeedback('copied')
+      toast.success('URL copied')
+    } catch {
+      setCopyFeedback('failed')
+    }
+    window.setTimeout(() => setCopyFeedback('idle'), 1800)
+  }
+
+  const handleCopyClientId = async () => {
+    if (!session) return
+    try {
+      await navigator.clipboard.writeText(session.id)
+      toast.success('Client ID copied')
+    } catch {
+      toast.error('Could not copy client ID')
+    }
+  }
+
+  const handleLogout = () => {
+    clearClientId()
+    window.location.reload()
+  }
+
+  const handleUpgrade = async () => {
+    if (!session) return
+    try {
+      const checkoutUrl = await createCheckoutSession(session.id)
+      window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+    } catch (err) {
+      toast.error(extractError(err))
+    }
+  }
+
+  return (
+    <>
+      <Toaster position="bottom-right" toastOptions={{ style: { fontSize: 13 } }} />
+      <AppShell>
+        {step === 'dashboard' && session && (
+          <Sidebar
+            activePage={activePage}
+            onNavigate={setActivePage}
+            requestCount={totalRequests}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            ownerEmail={session.ownerEmail}
+            onLogin={() => void startGoogleVerify()}
+            onLogout={handleLogout}
+          />
+        )}
+
+        {step === 'loading' && (
+          <LoadingScreen
+            statusMessage={statusMessage}
+            errorMessage={errorMessage}
+            onRetry={() => void bootstrapClient()}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        )}
+
+        {step === 'gate' && session && (
+          <GateScreen
+            onLogin={() => void startGoogleVerify()}
+            onSkip={skipGate}
+            verifying={verifying}
+            gauthEnabled={gauthEnabled}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        )}
+
+        {step === 'subdomain' && session && (
+          <SubdomainScreen
+            session={session}
+            subdomainInput={subdomainInput}
+            setSubdomainInput={setSubdomainInput}
+            onSubmit={handleSubdomainSubmit}
+            isBusy={isBusy}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        )}
+
+        {step === 'dashboard' && session && (
+          <>
+            {activePage === 'dashboard' && (
+              <>
+                {tierOf(session) === 'anonymous' && gauthEnabled && (
+                  <div style={{ padding: '0 28px', paddingTop: 16 }}>
+                    <VerifyBanner onVerify={() => void startGoogleVerify()} verifying={verifying} />
+                  </div>
+                )}
+                <DashboardPage
+                session={session}
+                connState={connState}
+                portInput={portInput}
+                setPortInput={setPortInput}
+                onPortSubmit={handlePortSubmit}
+                domainInput={domainInput}
+                setDomainInput={setDomainInput}
+                onDomainSubmit={handleDomainSubmit}
+                gauthEnabled={gauthEnabled}
+                onAuthToggle={handleAuthToggle}
+                isBusy={isBusy}
+                totalRequests={totalRequests}
+                onCopyUrl={handleCopyUrl}
+                copyFeedback={copyFeedback}
+                requestLog={requestLog}
+                bytesIn={bytesIn}
+                bytesOut={bytesOut}
+                dailyUsage={dailyUsage}
+                monthlyUsage={monthlyUsage}
+                portListening={portListening}
+                routeRules={routeRules}
+                onRouteRulesChange={setRouteRules}
+                routePortStatus={routePortStatus}
+                statusMessage={statusMessage}
+                uptimeSeconds={uptimeSeconds}
+                showNewTunnel={showNewTunnel}
+                onOpenNewTunnel={() => setShowNewTunnel(true)}
+                onCloseNewTunnel={() => setShowNewTunnel(false)}
+                onCreateTunnel={async (subdomain, port, tunnelType, password, duration, oneTime) => {
+                  const name = normalizeSubdomain(subdomain)
+                  const availability = await checkSubdomainAvailability(name)
+                  if (!availability.available) {
+                    setErrorMessage('That subdomain is already taken or reserved.')
+                    return
+                  }
+                  const created = await createTunnel(session.id, {
+                    subdomain: name,
+                    customDomain: '',
+                    port,
+                    requireAuth: false,
+                    pathRoutes: [{ path: '/', port }],
+                    tunnelType: tunnelType as any,
+                    password,
+                    duration,
+                    oneTime,
+                  })
+                  setPersistentTunnels(current => [...current, created])
+                  setShowNewTunnel(false)
+                  await startPersistentTunnel(created)
+                }}
+                tunnelType={persistentTunnels.find(t => t.id === selectedTunnelId)?.tunnelType}
+              />
+              </>
+            )}
+
+            {activePage === 'tunnels' && (
+              <TunnelsPage
+                session={session}
+                connState={connState}
+                portInput={portInput}
+                setPortInput={setPortInput}
+                onPortSubmit={handlePortSubmit}
+                isBusy={isBusy}
+                onCopyUrl={handleCopyUrl}
+                copyFeedback={copyFeedback}
+                requestLog={requestLog}
+                routeRules={routeRules}
+                onRouteRulesChange={setRouteRules}
+                routePortStatus={routePortStatus}
+                persistentTunnels={persistentTunnels}
+                selectedTunnelId={selectedTunnelId}
+                onSelectTunnel={selectPersistentTunnel}
+                onStartTunnel={(tunnel) => void startPersistentTunnel(tunnel)}
+                onStopTunnel={(tunnel) => void stopPersistentTunnel(tunnel)}
+                onDeleteTunnel={(tunnel) => void removePersistentTunnel(tunnel)}
+                portListening={portListening}
+                onNewTunnel={() => {
+                  setActivePage('dashboard')
+                  setShowNewTunnel(true)
+                }}
+              />
+            )}
+
+            {activePage === 'requests' && (
+              <RequestsPage
+                requestLog={requestLog}
+                onClear={clearLog}
+                retention={retention}
+                onRetentionChange={setRetention}
+              />
+            )}
+
+            {activePage === 'domains' && (
+              <DomainsPage
+                session={session}
+                domainInput={domainInput}
+                setDomainInput={setDomainInput}
+                onDomainSubmit={handleDomainSubmit}
+                isBusy={isBusy}
+              />
+            )}
+
+            {activePage === 'settings' && (
+              <SettingsPage
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                autoStart={autoStart}
+                onToggleAutoStart={() => setAutoStart(!autoStart)}
+                session={session}
+                onVerify={() => void startGoogleVerify()}
+                onUpgrade={() => void handleUpgrade()}
+                onCopyClientId={() => void handleCopyClientId()}
+                tunnels={persistentTunnels}
+                onExportTunnels={exportTunnelConfiguration}
+                onImportTunnels={(file) => void importTunnelConfiguration(file)}
+                verifying={verifying}
+                gauthEnabled={gauthEnabled}
+              />
+            )}
+
+            <FeedbackBanner infoMessage={infoMessage} errorMessage={errorMessage} />
+          </>
+        )}
+      </AppShell>
+    </>
+  )
+}
