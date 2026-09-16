@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { RequestLogEntry } from '../../lib/api'
 import { isNoiseRequestPath } from '../../lib/tunnel'
-import { Trash2, ChevronRight, Copy, Download, Search } from 'lucide-react'
 
 type Props = {
   requestLog: RequestLogEntry[]
@@ -31,18 +30,15 @@ const SENSITIVE_HEADERS = /authorization|cookie|set-cookie|proxy-authorization|x
 function syntaxHighlightJSON(json: string) {
   let str = json
   str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return str.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (match) => {
-    let cls = 'var(--blue)' // number
+  return str.replace(/(("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?))/g, (match) => {
+    let cls = 'var(--blue)'
     if (/^"/.test(match)) {
-      if (/:$/.test(match)) {
-        cls = 'var(--text)' // key
-      } else {
-        cls = 'var(--green)' // string
-      }
+      if (/:$/.test(match)) { cls = 'var(--text)' }
+      else { cls = 'var(--green)' }
     } else if (/true|false/.test(match)) {
-      cls = 'var(--orange)' // boolean
+      cls = 'var(--yellow)'
     } else if (/null/.test(match)) {
-      cls = 'var(--red)' // null
+      cls = 'var(--red)'
     }
     return `<span style="color: ${cls}">${match}</span>`
   })
@@ -113,26 +109,49 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
               Requests {displayLog.length > 0 && <span style={{ color: 'var(--text-soft)' }}>({displayLog.length})</span>}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <label className="ps-req-retention">Keep <select value={retention} onChange={event => onRetentionChange(Number(event.target.value))}><option value={50}>50</option><option value={100}>100</option><option value={250}>250</option></select></label>
-              <button className={`ps-btn ps-btn-ghost ps-btn-sm ${showFrameworkRequests ? 'active' : ''}`} onClick={() => setShowFrameworkRequests(value => !value)}>
+              <label className="ps-req-retention">
+                Keep{' '}
+                <select value={retention} onChange={event => onRetentionChange(Number(event.target.value))}>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={250}>250</option>
+                </select>
+              </label>
+              <button
+                className={`ps-btn ps-btn-ghost ps-btn-sm ${showFrameworkRequests ? 'active' : ''}`}
+                onClick={() => setShowFrameworkRequests(v => !v)}
+              >
                 {showFrameworkRequests ? 'Hide assets' : 'Show assets'}
               </button>
-              <button className="ps-btn-icon" onClick={onClear} title="Clear log">
-                <Trash2 size={12} />
+              <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={onClear} style={{ color: 'var(--red)' }}>
+                Clear
               </button>
             </div>
           </div>
 
           <div className="ps-req-filters">
-            <div className="ps-req-search"><Search size={12} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search method or path" /></div>
-            <select value={methodFilter} onChange={event => setMethodFilter(event.target.value)}><option value="all">All methods</option>{methods.map(method => <option key={method} value={method}>{method}</option>)}</select>
-            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="all">All status</option><option value="2">2xx</option><option value="3">3xx</option><option value="4">4xx</option><option value="5">5xx</option></select>
-            <label className="ps-req-sensitive"><input type="checkbox" checked={showSensitive} onChange={event => setShowSensitive(event.target.checked)} /> Sensitive headers</label>
+            <div className="ps-req-search">
+              <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search path…" />
+            </div>
+            <select value={methodFilter} onChange={event => setMethodFilter(event.target.value)}>
+              <option value="all">Method</option>
+              {methods.map(method => <option key={method} value={method}>{method}</option>)}
+            </select>
+            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+              <option value="all">Status</option>
+              <option value="2">2xx</option>
+              <option value="3">3xx</option>
+              <option value="4">4xx</option>
+              <option value="5">5xx</option>
+            </select>
+            <label className="ps-req-sensitive">
+              <input type="checkbox" checked={showSensitive} onChange={event => setShowSensitive(event.target.checked)} />
+              {' '}Sensitive
+            </label>
           </div>
 
           {displayLog.length === 0 ? (
             <div className="ps-empty" style={{ flex: 1 }}>
-              <ChevronRight size={28} />
               <span className="ps-empty-title">No requests yet</span>
               <span className="ps-empty-sub">Make a request to your tunnel URL to see it appear here.</span>
             </div>
@@ -147,10 +166,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                 <span className={methodClass(entry.method)}>{entry.method}</span>
                 <span className="ps-req-path">{entry.path}</span>
                 <div className="ps-req-meta">
-                  <span
-                    className={`ps-req-duration ${statusClass(entry.status)}`}
-                    style={{ fontSize: 11, fontFamily: 'var(--mono-font)' }}
-                  >
+                  <span className={`ps-req-duration ${statusClass(entry.status)}`} style={{ fontSize: 11, fontFamily: 'var(--mono-font)' }}>
                     {entry.status ?? '???'}
                   </span>
                   <span className="ps-req-time">{entry.durationMs != null ? `${entry.durationMs}ms` : ''}</span>
@@ -178,9 +194,12 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                     {selected.durationMs}ms
                   </span>
                 )}
-                <button className="ps-btn-icon" onClick={() => void copyCurl()} title="Copy as cURL"><Copy size={12} /></button>
-                <button className="ps-btn-icon" onClick={exportCurl} title="Export request as cURL"><Download size={12} /></button>
-                {copied && <span className="ps-req-copied">Copied</span>}
+                <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={() => void copyCurl()}>
+                  {copied ? 'Copied' : 'Copy curl'}
+                </button>
+                <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={exportCurl}>
+                  Export .sh
+                </button>
               </div>
 
               <div className="ps-detail-tabs">
@@ -215,7 +234,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                         Request Headers
                       </div>
                       <div className="ps-code">
-                          {selected.headers && Object.keys(selected.headers).length > 0 ? (
+                        {selected.headers && Object.keys(selected.headers).length > 0 ? (
                           redactHeaders(selected.headers, showSensitive).map(([k, v]) => (
                             <div key={k}><span style={{ color: 'var(--text-muted)' }}>{k}:</span> {v}</div>
                           ))
@@ -239,21 +258,18 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                   </div>
                 )}
                 {activeTab === 'response' && (
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-                      Response Body
-                    </div>
-                    <div className="ps-code" style={{ whiteSpace: 'pre' }}>
-                      <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
-                          Response Headers
-                        </div>
-                        <div className="ps-code">
-                          {selected.responseHeaders && Object.keys(selected.responseHeaders).length > 0
-                            ? redactHeaders(selected.responseHeaders, showSensitive).map(([key, value]) => <div key={key}><span style={{ color: 'var(--text-muted)' }}>{key}:</span> {value}</div>)
-                            : '(No response headers recorded)'}
-                        </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+                        Response Headers
                       </div>
+                      <div className="ps-code">
+                        {selected.responseHeaders && Object.keys(selected.responseHeaders).length > 0
+                          ? redactHeaders(selected.responseHeaders, showSensitive).map(([key, value]) => <div key={key}><span style={{ color: 'var(--text-muted)' }}>{key}:</span> {value}</div>)
+                          : '(No response headers recorded)'}
+                      </div>
+                    </div>
+                    <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
                         Response Body
                       </div>
@@ -272,7 +288,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                         {selected.durationMs != null ? `${selected.durationMs}ms` : '—'}
                       </div>
                       <div style={{ color: 'var(--text-soft)', marginTop: 8 }}>
-                        This is the time to proxy the request to localhost and return the response. Fine-grained DNS/TLS splits are not recorded.
+                        Time to proxy the request to localhost and receive the response. Fine-grained DNS/TLS splits are not recorded.
                       </div>
                     </div>
                   </div>
@@ -281,9 +297,8 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
             </>
           ) : (
             <div className="ps-empty" style={{ flex: 1 }}>
-              <ChevronRight size={32} />
               <span className="ps-empty-title">Select a request</span>
-              <span className="ps-empty-sub">Click any request in the list to inspect its details</span>
+              <span className="ps-empty-sub">Click any request in the list to inspect headers, body, and timing.</span>
             </div>
           )}
         </div>
@@ -291,4 +306,3 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
     </div>
   )
 }
-

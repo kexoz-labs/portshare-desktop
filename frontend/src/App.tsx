@@ -684,6 +684,7 @@ export default function App() {
             ownerEmail={session.ownerEmail}
             onLogin={() => void startGoogleVerify()}
             onLogout={handleLogout}
+            connState={connState}
           />
         )}
 

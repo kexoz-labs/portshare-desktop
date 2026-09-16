@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Check, ArrowUpRight, X, Zap, Sparkles, Shield, Loader } from 'lucide-react'
 import { API_BASE_URL } from '../../lib/api'
 
 type Plan = {
@@ -9,6 +8,7 @@ type Plan = {
   bandwidthLimit: number
   features: string[]
   active: boolean
+  discountPercent?: number
 }
 
 type Props = {
@@ -23,11 +23,37 @@ function formatBytes(v: number) {
   return `${(v / 1024 / 1024 / 1024).toFixed(0)} GB`
 }
 
-const PLAN_ICON: Record<string, typeof Zap> = {
-  pro_plus: Sparkles,
-  pro: Zap,
-  free: Shield,
-}
+// Fallback plans if server catalog is unavailable
+const FALLBACK_PLANS: Plan[] = [
+  {
+    id: 'pro',
+    name: 'Pro',
+    priceCents: 900,
+    bandwidthLimit: 10 * 1024 * 1024 * 1024,
+    features: [
+      '10 GB / month bandwidth',
+      'Custom domains',
+      'Google auth wall',
+      'Priority tunnels',
+      'Request inspector (unlimited)',
+    ],
+    active: true,
+  },
+  {
+    id: 'pro_plus',
+    name: 'Pro+',
+    priceCents: 1900,
+    bandwidthLimit: 50 * 1024 * 1024 * 1024,
+    features: [
+      '50 GB / month bandwidth',
+      'Everything in Pro',
+      'White-label auth branding',
+      'Team seats',
+      'Priority support',
+    ],
+    active: true,
+  },
+]
 
 export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props) {
   const [plans, setPlans] = useState<Plan[]>([])
@@ -38,8 +64,11 @@ export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props
   useEffect(() => {
     fetch(`${API_BASE_URL}/admin/plans`)
       .then(r => r.json() as Promise<{ plans?: Plan[] }>)
-      .then(d => setPlans((d.plans ?? []).filter(p => p.active && p.id !== 'free')))
-      .catch(() => setPlans([]))
+      .then(d => {
+        const paid = (d.plans ?? []).filter(p => p.active && p.id !== 'free')
+        setPlans(paid.length > 0 ? paid : FALLBACK_PLANS)
+      })
+      .catch(() => setPlans(FALLBACK_PLANS))
       .finally(() => setLoading(false))
   }, [])
 
@@ -59,27 +88,24 @@ export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props
       <div className="ps-modal upgrade-modal">
         <div className="ps-modal-header">
           <div>
-            <div className="ps-section-title">Upgrade your plan</div>
-            <div className="ps-tunnel-card-subtitle">Choose a plan that grows with you</div>
+            <div className="ps-modal-title">Upgrade plan</div>
+            <div className="ps-tunnel-card-subtitle">Month-to-month. Cancel anytime.</div>
           </div>
-          <button className="ps-btn-icon" onClick={onClose}><X size={16} /></button>
+          <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={onClose}>✕</button>
         </div>
 
         <div className="upgrade-modal-body">
           {loading ? (
             <div className="upgrade-modal-loading">
-              <Loader size={20} className="spin" />
-              <span>Loading plans…</span>
+              <span style={{ color: 'var(--text-soft)' }}>Loading plans…</span>
             </div>
-          ) : plans.length === 0 ? (
-            <p style={{ color: 'var(--text-soft)', textAlign: 'center', padding: '24px 0' }}>
-              Plans unavailable. Visit <a href="https://portshare.kexoz.dev/pricing" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>portshare.kexoz.dev/pricing</a>
-            </p>
           ) : (
             <div className="upgrade-plans-grid">
               {plans.map(plan => {
                 const isCurrent = plan.id === currentPlan
-                const Icon = PLAN_ICON[plan.id] ?? Zap
+                const price = plan.discountPercent && plan.discountPercent > 0
+                  ? Math.round(plan.priceCents * (100 - plan.discountPercent) / 100)
+                  : plan.priceCents
                 return (
                   <div key={plan.id} className={`upgrade-plan-card${isCurrent ? ' current' : ''}${plan.id === 'pro' ? ' featured' : ''}`}>
                     {plan.id === 'pro' && !isCurrent && (
@@ -88,32 +114,36 @@ export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props
                     {isCurrent && (
                       <div className="upgrade-plan-badge current-badge">Current Plan</div>
                     )}
-                    <div className="upgrade-plan-icon">
-                      <Icon size={18} />
-                    </div>
                     <h3 className="upgrade-plan-name">{plan.name}</h3>
                     <div className="upgrade-plan-price">
-                      {plan.priceCents === 0 ? 'Free' : `$${(plan.priceCents / 100).toFixed(0)}`}
+                      {plan.priceCents === 0 ? 'Free' : `$${(price / 100).toFixed(0)}`}
                       {plan.priceCents > 0 && <span>/mo</span>}
                     </div>
+                    {plan.discountPercent && plan.discountPercent > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginTop: -4, marginBottom: 4 }}>
+                        {plan.discountPercent}% off — was ${(plan.priceCents / 100).toFixed(0)}/mo
+                      </div>
+                    )}
                     <div className="upgrade-plan-bw">{formatBytes(plan.bandwidthLimit)} / month</div>
                     <ul className="upgrade-plan-features">
                       {plan.features.map(f => (
-                        <li key={f}><Check size={11} />{f}</li>
+                        <li key={f}>
+                          <span style={{ color: 'var(--green)', fontSize: 11, marginRight: 6, fontWeight: 700 }}>✓</span>
+                          {f}
+                        </li>
                       ))}
                     </ul>
                     {isCurrent ? (
-                      <div className="upgrade-plan-current"><Check size={13} /> Active</div>
+                      <div className="upgrade-plan-current">
+                        <span style={{ color: 'var(--green)', marginRight: 6 }}>✓</span> Active plan
+                      </div>
                     ) : (
                       <button
                         className={`ps-btn ps-btn-primary ps-btn-sm upgrade-plan-btn${plan.id === 'pro' ? ' upgrade-plan-btn-featured' : ''}`}
                         onClick={() => void handleCheckout(plan.id)}
                         disabled={busy}
                       >
-                        {busy && selectedPlanId === plan.id
-                          ? <Loader size={13} className="spin" />
-                          : <ArrowUpRight size={13} />}
-                        Upgrade to {plan.name}
+                        {busy && selectedPlanId === plan.id ? 'Loading…' : `Upgrade to ${plan.name}`}
                       </button>
                     )}
                   </div>
@@ -122,7 +152,8 @@ export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props
             </div>
           )}
           <p className="upgrade-footer-note">
-            Subscription is month-to-month. Cancel anytime from your <a href={`https://portshare.kexoz.dev/account`} target="_blank" rel="noreferrer">account portal</a>.
+            Cancel anytime from your{' '}
+            <a href="https://portshare.kexoz.dev/account" target="_blank" rel="noreferrer">account portal</a>.
           </p>
         </div>
       </div>
