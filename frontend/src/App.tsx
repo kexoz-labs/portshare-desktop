@@ -849,6 +849,7 @@ export default function App() {
                 onImportTunnels={(file) => void importTunnelConfiguration(file)}
                 verifying={verifying}
                 gauthEnabled={gauthEnabled}
+                portInput={portInput}
               />
             )}
 

@@ -106,22 +106,23 @@ body {
 .ps-nav-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 0;
   padding: 7px 10px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   border: none;
   background: none;
   width: 100%;
   text-align: left;
 }
 
-.ps-nav-item svg { flex-shrink: 0; transition: color 0.15s ease; }
+/* no svg in nav */
 
 .ps-nav-item:hover {
   background: var(--bg-hover);
@@ -130,10 +131,8 @@ body {
 
 .ps-nav-item.active {
   background: var(--bg-active);
-  color: var(--text-accent);
+  color: var(--text-strong);
 }
-
-.ps-nav-item.active svg { color: var(--accent); }
 
 .ps-nav-item.active::before {
   content: '';
@@ -945,12 +944,13 @@ body {
 .ps-settings-nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   padding: 7px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-muted);
   background: none;
   border: none;
