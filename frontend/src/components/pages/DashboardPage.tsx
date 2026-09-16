@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Copy, ExternalLink, Activity, Clock, Database, Plus, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { Copy, ExternalLink, Activity, Clock, ChevronDown, ChevronUp, Database, Plus, Check } from 'lucide-react'
+import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { ClientSession, ConnectionState, RequestLogEntry, UsagePoint } from '../../lib/api'
 import { ROOT_DOMAIN, tierOf } from '../../lib/api'
 import NewTunnelModal from '../modals/NewTunnelModal'
@@ -35,7 +36,7 @@ type Props = {
   showNewTunnel: boolean
   onOpenNewTunnel: () => void
   onCloseNewTunnel: () => void
-  onCreateTunnel: (subdomain: string, port: number, tunnelType: string, password?: string, duration?: string, oneTime?: boolean) => void | Promise<void>
+  onCreateTunnel: (subdomain: string, port: number, tunnelType: string, password?: string, duration?: string, oneTime?: boolean, logoUrl?: string, welcomeMessage?: string) => void | Promise<void>
   tunnelType?: 'http' | 'tcp' | 'udp' | 'e2e' | 'pty'
 }
 
@@ -282,6 +283,37 @@ export default function DashboardPage({
             <div className="ps-bandwidth-bar">
               <div className="ps-bandwidth-fill" style={{ width: `${bwPct}%` }} />
             </div>
+            
+            {dailyUsage.length > 0 && (
+              <div style={{ height: 60, marginTop: 12, width: '100%', marginLeft: -4, marginRight: -4 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={[...dailyUsage].reverse().map(p => ({ time: p.period, bytes: p.totalBytes }))}>
+                    <defs>
+                      <linearGradient id="colorBw" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--blue)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--blue)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <Tooltip 
+                      contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+                      itemStyle={{ color: 'var(--text)' }}
+                      formatter={(val: any) => [formatBytes(val), 'Traffic']}
+                      labelStyle={{ color: 'var(--text-soft)', marginBottom: 4 }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="bytes" 
+                      stroke="var(--blue)" 
+                      fillOpacity={1} 
+                      fill="url(#colorBw)" 
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
             <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-soft)' }}>
               {(100 - bwPct).toFixed(1)}% remaining this period
             </div>
@@ -320,7 +352,7 @@ export default function DashboardPage({
           </div>
         </div>
 
-        {session?.subdomain && (!tunnelType || tunnelType === 'http' || tunnelType === 'tcp') && (
+        {session?.subdomain && (!tunnelType || tunnelType === 'http' || tunnelType === 'tcp' || tunnelType === 'udp') && (
           <TunnelConsole
             connState={connState}
             port={portInput}
@@ -346,20 +378,22 @@ export default function DashboardPage({
         )}
 
         {/* SSH tunnel info */}
-        <div className="ps-card animate-fade-up delay-200" style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Zero-Install SSH Tunnel
-            </span>
-            <span className="ps-badge ps-badge-gray">SSH</span>
+        {tunnelType !== 'udp' && tunnelType !== 'e2e' && (
+          <div className="ps-card animate-fade-up delay-200" style={{ padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Zero-Install SSH Tunnel
+              </span>
+              <span className="ps-badge ps-badge-gray">SSH</span>
+            </div>
+            <div className="ps-code">
+              ssh -R 80:localhost:{portInput || '3000'} portshare.kexoz.dev
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--text-soft)', marginTop: 10 }}>
+              No client install needed. Use native SSH to create tunnels from any machine.
+            </p>
           </div>
-          <div className="ps-code">
-            ssh -R 80:localhost:{portInput || '3000'} portshare.kexoz.dev
-          </div>
-          <p style={{ fontSize: 11.5, color: 'var(--text-soft)', marginTop: 10 }}>
-            No client install needed. Use native SSH to create tunnels from any machine.
-          </p>
-        </div>
+        )}
       </div>
 
       {showNewTunnel && (

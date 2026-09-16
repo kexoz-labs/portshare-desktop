@@ -91,7 +91,7 @@ export default function SettingsPage({ theme, onToggleTheme, autoStart, onToggle
                     <div className="ps-settings-row-label">Manage billing</div>
                     <div className="ps-settings-row-desc">View plans, usage, invoices, and renewal status in the web account.</div>
                   </div>
-                  <a className="ps-btn ps-btn-secondary ps-btn-sm" href={`https://myapp.${ROOT_DOMAIN}/account?clientId=${encodeURIComponent(session.id)}`} target="_blank" rel="noreferrer">
+                  <a className="ps-btn ps-btn-secondary ps-btn-sm" href={`https://${ROOT_DOMAIN}/account?clientId=${encodeURIComponent(session.id)}`} target="_blank" rel="noreferrer">
                     Open account
                   </a>
                 </div>
@@ -166,7 +166,7 @@ export default function SettingsPage({ theme, onToggleTheme, autoStart, onToggle
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="ps-badge ps-badge-gray" style={{ textTransform: 'capitalize' }}>{TIER_LABEL[tier] ?? session.plan}</span>
-                    {tier !== 'pro' && <button className="ps-btn ps-btn-primary ps-btn-sm" onClick={onUpgrade}>Upgrade</button>}
+                    {tier !== 'pro_plus' && <button className="ps-btn ps-btn-primary ps-btn-sm" onClick={onUpgrade}>Upgrade</button>}
                   </div>
                 </div>
                 <div className="ps-settings-row">

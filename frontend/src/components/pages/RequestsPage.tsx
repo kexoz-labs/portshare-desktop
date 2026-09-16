@@ -28,9 +28,29 @@ function formatTime(iso: string) {
 
 const SENSITIVE_HEADERS = /authorization|cookie|set-cookie|proxy-authorization|x-api-key|x-auth-token/i
 
+function syntaxHighlightJSON(json: string) {
+  let str = json
+  str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return str.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (match) => {
+    let cls = 'var(--blue)' // number
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'var(--text)' // key
+      } else {
+        cls = 'var(--green)' // string
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'var(--orange)' // boolean
+    } else if (/null/.test(match)) {
+      cls = 'var(--red)' // null
+    }
+    return `<span style="color: ${cls}">${match}</span>`
+  })
+}
+
 function formatBody(body: string | undefined) {
   if (!body) return ''
-  try { return JSON.stringify(JSON.parse(body), null, 2) } catch { return body }
+  try { return syntaxHighlightJSON(JSON.stringify(JSON.parse(body), null, 2)) } catch { return body }
 }
 
 function redactHeaders(headers: Record<string, string> | undefined, showSensitive: boolean) {
@@ -211,9 +231,11 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
                       Request Body
                     </div>
-                    <div className="ps-code" style={{ whiteSpace: 'pre' }}>
-                      {selected.method === 'GET' ? '(no body)' : (formatBody(selected.body) || '(empty body)')}
-                    </div>
+                    {selected.method === 'GET' ? (
+                      <div className="ps-code" style={{ whiteSpace: 'pre' }}>(no body)</div>
+                    ) : (
+                      <div className="ps-code" style={{ whiteSpace: 'pre' }} dangerouslySetInnerHTML={{ __html: formatBody(selected.body) || '(empty body)' }} />
+                    )}
                   </div>
                 )}
                 {activeTab === 'response' && (
@@ -235,9 +257,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-soft)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
                         Response Body
                       </div>
-                      <div className="ps-code" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                        {formatBody(selected.responseBody) || '(empty response body)'}
-                      </div>
+                      <div className="ps-code" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }} dangerouslySetInnerHTML={{ __html: formatBody(selected.responseBody) || '(empty response body)' }} />
                     </div>
                   </div>
                 )}

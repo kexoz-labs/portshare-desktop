@@ -33,6 +33,7 @@ import TunnelsPage from './components/pages/TunnelsPage'
 import RequestsPage from './components/pages/RequestsPage'
 import DomainsPage from './components/pages/DomainsPage'
 import SettingsPage from './components/pages/SettingsPage'
+import UpgradeModal from './components/modals/UpgradeModal'
 
 type Page = 'dashboard' | 'tunnels' | 'requests' | 'domains' | 'settings'
 
@@ -56,6 +57,7 @@ export default function App() {
   const [connectedAt, setConnectedAt] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [showNewTunnel, setShowNewTunnel] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [autoStart, setAutoStart] = useState(() => window.localStorage.getItem('portshare-autostart') === 'true')
   const [persistentTunnels, setPersistentTunnels] = useState<PersistentTunnel[]>([])
   const [selectedTunnelId, setSelectedTunnelId] = useState<string | null>(null)
@@ -115,7 +117,7 @@ export default function App() {
   const verifyAttempt = useRef(0)
   const lastPortListening = useRef<boolean | null>(null)
 
-  const openTunnelConnection = useCallback((clientId: string, tunnelId?: string, port?: number, routes?: Array<{ path: string; port: number }>) => {
+  const openTunnelConnection = useCallback((clientId: string, tunnelId?: string, port?: number, routes?: Array<{ path: string; port: number }>, tunnelType?: string) => {
     const key = tunnelId ?? 'legacy'
     tunnelConnections.current.get(key)?.close()
     const portRef = tunnelId ? { current: port ?? null } : tunnelPort
@@ -124,6 +126,7 @@ export default function App() {
       apiBaseUrl: API_BASE_URL,
       clientId,
       tunnelId,
+      tunnelType,
       portRef,
       onStateChange: (state, message) => {
         setConnState(state)
@@ -176,6 +179,7 @@ export default function App() {
     window.localStorage.setItem('portshare-autostart', String(autoStart))
   }, [autoStart])
 
+  // --- Network Checks ---
   const checkListening = useCallback(async (port: number | null) => {
     if (!port) {
       setPortListening(null)
@@ -284,9 +288,9 @@ export default function App() {
 
       const activeTunnels = savedTunnels.filter(tunnel => tunnel.active)
       if (activeTunnels.length > 0) {
-        activeTunnels.forEach(tunnel => openTunnelConnection(nextSession.id, tunnel.id, tunnel.port, tunnel.pathRoutes))
+        activeTunnels.forEach(tunnel => openTunnelConnection(nextSession.id, tunnel.id, tunnel.port, tunnel.pathRoutes, tunnel.tunnelType))
       } else {
-        openTunnelConnection(nextSession.id, selected?.id, selected?.port, selected?.pathRoutes)
+        openTunnelConnection(nextSession.id, selected?.id, selected?.port, selected?.pathRoutes, selected?.tunnelType)
       }
 
       // Best-effort: needed by the verify gate and the auth-wall toggle.
@@ -522,7 +526,7 @@ export default function App() {
       selectPersistentTunnel(tunnel)
       const updated = await updateTunnel(session.id, { ...tunnel, active: true })
       setPersistentTunnels(current => current.map(item => item.id === updated.id ? updated : item))
-      openTunnelConnection(session.id, updated.id, updated.port, updated.pathRoutes)
+      openTunnelConnection(session.id, updated.id, updated.port, updated.pathRoutes, updated.tunnelType)
       setInfoMessage(`Starting ${updated.subdomain}.${ROOT_DOMAIN}...`)
     } catch (err) {
       setErrorMessage(extractError(err))
@@ -641,11 +645,17 @@ export default function App() {
     window.location.reload()
   }
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = async (planId?: string) => {
     if (!session) return
+    if (!planId) {
+      // Show plan picker modal first
+      setShowUpgradeModal(true)
+      return
+    }
     try {
-      const checkoutUrl = await createCheckoutSession(session.id)
+      const checkoutUrl = await createCheckoutSession(session.id, planId)
       window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+      setShowUpgradeModal(false)
     } catch (err) {
       toast.error(extractError(err))
     }
@@ -654,6 +664,14 @@ export default function App() {
   return (
     <>
       <Toaster position="bottom-right" toastOptions={{ style: { fontSize: 13 } }} />
+      {showUpgradeModal && session && (
+        <UpgradeModal
+          currentPlan={session.plan}
+          clientId={session.id}
+          onClose={() => setShowUpgradeModal(false)}
+          onCheckout={(planId) => handleUpgrade(planId)}
+        />
+      )}
       <AppShell>
         {step === 'dashboard' && session && (
           <Sidebar
@@ -739,7 +757,7 @@ export default function App() {
                 showNewTunnel={showNewTunnel}
                 onOpenNewTunnel={() => setShowNewTunnel(true)}
                 onCloseNewTunnel={() => setShowNewTunnel(false)}
-                onCreateTunnel={async (subdomain, port, tunnelType, password, duration, oneTime) => {
+                onCreateTunnel={async (subdomain, port, tunnelType, password, duration, oneTime, logoUrl, welcomeMessage) => {
                   const name = normalizeSubdomain(subdomain)
                   const availability = await checkSubdomainAvailability(name)
                   if (!availability.available) {
@@ -756,6 +774,8 @@ export default function App() {
                     password,
                     duration,
                     oneTime,
+                    logoUrl,
+                    welcomeMessage,
                   })
                   setPersistentTunnels(current => [...current, created])
                   setShowNewTunnel(false)

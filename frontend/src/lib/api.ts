@@ -55,6 +55,8 @@ export type PersistentTunnel = {
   password?: string
   duration?: string
   oneTime?: boolean
+  logoUrl?: string
+  welcomeMessage?: string
 }
 
 export type TunnelRequest = {

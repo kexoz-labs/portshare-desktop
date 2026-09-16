@@ -6,7 +6,7 @@ import { ROOT_DOMAIN } from '../../lib/api'
 type Props = {
   onClose: () => void
   initialSubdomain?: string
-  onSubmit: (subdomain: string, port: number, tunnelType: string, password?: string, duration?: string, oneTime?: boolean) => void | Promise<void>
+  onSubmit: (subdomain: string, port: number, tunnelType: string, password?: string, duration?: string, oneTime?: boolean, logoUrl?: string, welcomeMessage?: string) => void | Promise<void>
 }
 
 export default function NewTunnelModal({ onClose, onSubmit, initialSubdomain = '' }: Props) {
@@ -19,6 +19,9 @@ export default function NewTunnelModal({ onClose, onSubmit, initialSubdomain = '
   const [password, setPassword] = useState('')
   const [duration, setDuration] = useState('')
   const [oneTime, setOneTime] = useState(false)
+  
+  const [logoUrl, setLogoUrl] = useState('')
+  const [welcomeMessage, setWelcomeMessage] = useState('')
 
   // Compute final tunnelType for the backend based on user selections
   const computedTunnelType = 
@@ -34,7 +37,7 @@ export default function NewTunnelModal({ onClose, onSubmit, initialSubdomain = '
     const p = Number(port)
     if (!p || p < 1 || p > 65535) return
     if (!subdomain.trim()) return
-    void onSubmit(subdomain.trim().toLowerCase(), p, computedTunnelType, password, duration, oneTime)
+    void onSubmit(subdomain.trim().toLowerCase(), p, computedTunnelType, password, duration, oneTime, logoUrl, welcomeMessage)
   }
 
   return (
@@ -208,6 +211,28 @@ export default function NewTunnelModal({ onClose, onSubmit, initialSubdomain = '
                   <input type="checkbox" checked={oneTime} onChange={e => setOneTime(e.target.checked)} />
                   One-Time
                 </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="ps-input-wrap" style={{ marginTop: 16 }}>
+            <label className="ps-label">Auth Wall Custom Branding (Pro)</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="ps-input-group">
+                <input
+                  className="ps-input"
+                  placeholder="Logo URL (e.g. https://example.com/logo.png)"
+                  value={logoUrl}
+                  onChange={e => setLogoUrl(e.target.value)}
+                />
+              </div>
+              <div className="ps-input-group">
+                <input
+                  className="ps-input"
+                  placeholder="Welcome Message (e.g. Acme Corp internal preview)"
+                  value={welcomeMessage}
+                  onChange={e => setWelcomeMessage(e.target.value)}
+                />
               </div>
             </div>
           </div>

@@ -111,40 +111,28 @@ export default function GateScreen({ onLogin, onSkip, verifying, gauthEnabled, t
         {/* ── BUTTONS ── */}
         <div className="animate-gate-line-3" style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
 
-          {/* Google — always visible, disabled when not configured */}
+          {/* Google — always visible */}
           <button
             type="button"
-            onClick={gauthEnabled && !verifying ? onLogin : undefined}
-            disabled={!gauthEnabled || verifying}
-            title={!gauthEnabled ? 'Google sign-in is not enabled on this server' : undefined}
+            onClick={!verifying ? onLogin : undefined}
+            disabled={verifying}
             style={{
-              width: '100%', cursor: gauthEnabled ? 'pointer' : 'not-allowed',
+              width: '100%', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
               padding: '10px 20px', fontSize: 13.5, fontWeight: 600,
               fontFamily: 'var(--sans-font)', letterSpacing: '-0.01em',
               borderRadius: 11, border: '1px solid var(--border-bright)',
-              background: 'var(--bg-elevated)', color: gauthEnabled ? 'var(--text)' : 'var(--text-soft)',
-              opacity: !gauthEnabled ? 0.48 : 1,
+              background: 'var(--bg-elevated)', color: 'var(--text)',
               transition: 'all 0.15s ease',
             }}
-            onMouseOver={e => { if (gauthEnabled) { (e.currentTarget).style.background = 'var(--bg-hover)'; (e.currentTarget).style.borderColor = 'var(--border-focus)'; } }}
+            onMouseOver={e => { (e.currentTarget).style.background = 'var(--bg-hover)'; (e.currentTarget).style.borderColor = 'var(--border-focus)'; }}
             onMouseOut={e => { (e.currentTarget).style.background = 'var(--bg-elevated)'; (e.currentTarget).style.borderColor = 'var(--border-bright)'; }}
           >
             {verifying
               ? <><Spinner /> Waiting for Google…</>
               : <>
-                  <GoogleIcon greyscale={!gauthEnabled} />
+                  <GoogleIcon greyscale={false} />
                   Continue with Google
-                  {!gauthEnabled && (
-                    <span style={{
-                      marginLeft: 6, fontSize: 10, fontWeight: 600,
-                      padding: '2px 5px', borderRadius: 4,
-                      background: 'var(--bg-app)', border: '1px solid var(--border)',
-                      color: 'var(--text-soft)',
-                    }}>
-                      Not set up
-                    </span>
-                  )}
                 </>
             }
           </button>
