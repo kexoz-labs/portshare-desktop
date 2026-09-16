@@ -124,7 +124,7 @@ function connectTunnel({ tunnelUrl, tunnelType, getPort, onLogEntry, onStateChan
                 body: bodyStr.substring(0, 10000)
               });
             }
-          } catch (e) {}
+          } catch {}
         }
         localSocket.write(data);
       });
@@ -157,7 +157,7 @@ function connectTunnel({ tunnelUrl, tunnelType, getPort, onLogEntry, onStateChan
                 responseBody: bodyStr.substring(0, 10000)
               });
             }
-          } catch (e) {}
+          } catch {}
         }
         stream.write(data);
       });
