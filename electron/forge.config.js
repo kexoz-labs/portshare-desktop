@@ -62,7 +62,7 @@ module.exports = {
       name: '@electron-forge/publisher-github',
       config: {
         repository: {
-          owner: 'kexoz',
+          owner: 'kexoz-labs',
           name: 'portshare-desktop'
         },
         prerelease: false,
