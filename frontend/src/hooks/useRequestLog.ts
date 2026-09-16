@@ -13,7 +13,7 @@ export function useRequestLog() {
 
   const addLogEntry = useCallback((entry: RequestLogEntry) => {
     setRequestLog(prev => {
-      let next = [...prev]
+      const next = [...prev]
       const existingIdx = next.findIndex(e => e.id === entry.id)
       if (existingIdx !== -1) {
         next[existingIdx] = { ...next[existingIdx], ...entry }

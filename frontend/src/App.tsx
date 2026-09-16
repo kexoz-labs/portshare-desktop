@@ -323,10 +323,11 @@ export default function App() {
 
   useEffect(() => {
     void bootstrapClient()
+    const connections = tunnelConnections.current
     return () => {
       verifyAttempt.current += 1
-      tunnelConnections.current.forEach(connection => connection.close())
-      tunnelConnections.current.clear()
+      connections.forEach(connection => connection.close())
+      connections.clear()
       tunnelClose.current?.()
       tunnelClose.current = null
     }
@@ -770,7 +771,7 @@ export default function App() {
                     port,
                     requireAuth: false,
                     pathRoutes: [{ path: '/', port }],
-                    tunnelType: tunnelType as any,
+                    tunnelType: tunnelType as import('./lib/api').PersistentTunnel['tunnelType'],
                     password,
                     duration,
                     oneTime,

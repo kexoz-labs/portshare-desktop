@@ -297,7 +297,7 @@ export default function DashboardPage({
                     <Tooltip 
                       contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
                       itemStyle={{ color: 'var(--text)' }}
-                      formatter={(val: any) => [formatBytes(val), 'Traffic']}
+                      formatter={(val: number | string) => [formatBytes(Number(val)), 'Traffic']}
                       labelStyle={{ color: 'var(--text-soft)', marginBottom: 4 }}
                     />
                     <Area 

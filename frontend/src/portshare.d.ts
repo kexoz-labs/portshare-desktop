@@ -26,10 +26,10 @@ declare global {
       notify: (payload: { title: string; body: string }) => Promise<boolean>
       startTunnel?: (config: { tunnelUrl: string; port: number }) => Promise<boolean>
       stopTunnel?: () => Promise<boolean>
-      updateTray?: (tunnels: any[]) => Promise<boolean>
+      updateTray?: (tunnels: import('./lib/api').PersistentTunnel[]) => Promise<boolean>
       setAutoStart?: (enabled: boolean) => Promise<boolean>
       onTunnelState?: (callback: (state: import('./lib/api').ConnectionState, msg?: string) => void) => void
-      onLogEntry: (callback: (entry: any) => void) => void
+      onLogEntry: (callback: (entry: import('./lib/api').RequestLogEntry) => void) => void
     }
   }
 }
