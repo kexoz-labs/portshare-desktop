@@ -221,7 +221,7 @@ export default function DashboardPage({
                     <Tooltip
                       contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
                       itemStyle={{ color: 'var(--text)' }}
-                      formatter={(val: number | string) => [formatBytes(Number(val)), 'Traffic']}
+                      formatter={(val: any) => [formatBytes(Number(val)), 'Traffic']}
                       labelStyle={{ color: 'var(--text-soft)', marginBottom: 4 }}
                     />
                     <Area type="monotone" dataKey="bytes" stroke="var(--accent)" fillOpacity={1} fill="url(#colorBw)" strokeWidth={1.5} isAnimationActive={false} />

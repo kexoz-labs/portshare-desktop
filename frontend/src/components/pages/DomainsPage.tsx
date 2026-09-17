@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Globe, Plus, Trash2, CheckCircle, Clock, XCircle, Copy, X, Sparkles } from 'lucide-react'
+import { Globe, Plus, Copy, X, Sparkles } from 'lucide-react'
 import type { ClientSession } from '../../lib/api'
 import { ROOT_DOMAIN } from '../../lib/api'
 

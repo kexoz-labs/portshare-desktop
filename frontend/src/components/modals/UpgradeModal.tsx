@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, CheckCircle2, Shield, X, Rocket } from 'lucide-react'
+import { CheckCircle2, Shield, X, Rocket } from 'lucide-react'
 import { API_BASE_URL } from '../../lib/api'
 
 type Plan = {

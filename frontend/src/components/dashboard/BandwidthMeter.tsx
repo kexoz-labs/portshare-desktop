@@ -52,7 +52,7 @@ export default function BandwidthMeter({ session, dailyUsage = [], onVerify }: B
               <Tooltip 
                 contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
                 itemStyle={{ color: 'var(--text)' }}
-                formatter={(val: number | string) => [`${Number(val).toFixed(2)} MB`, 'Traffic']}
+                formatter={(val: any) => [`${Number(val).toFixed(2)} MB`, 'Traffic']}
                 labelStyle={{ color: 'var(--text-soft)', marginBottom: 4 }}
               />
               <Area 
