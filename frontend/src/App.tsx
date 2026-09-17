@@ -71,8 +71,6 @@ export default function App() {
   const [bytesIn, setBytesIn] = useState(0)
   const [bytesOut, setBytesOut] = useState(0)
   const [dailyUsage, setDailyUsage] = useState<import('./lib/api').UsagePoint[]>([])
-  const [monthlyUsage, setMonthlyUsage] = useState<import('./lib/api').UsagePoint[]>([])
-
   const { theme, toggleTheme } = useTheme()
   const { requestLog, totalRequests, retention, setRetention, addLogEntry, clearLog } = useRequestLog()
 
@@ -233,7 +231,6 @@ export default function App() {
         setBytesIn(stats.bytesIn ?? 0)
         setBytesOut(stats.bytesOut ?? 0)
         setDailyUsage(stats.dailyUsage ?? [])
-        setMonthlyUsage(stats.monthlyUsage ?? [])
       } catch {
         // Keep last known values if stats briefly fail.
       }
@@ -250,8 +247,8 @@ export default function App() {
   const bootstrapClient = useCallback(async (): Promise<void> => {
     setStep('loading')
     setIsBusy(true)
-    setErrorMessage('')
-    setInfoMessage('')
+    toast.error('')
+    toast.success('')
     setConnState('connecting')
 
     try {
@@ -293,18 +290,18 @@ export default function App() {
 
       if (nextSession.subdomain.length > 0) {
         setStep('dashboard')
-        setInfoMessage('Identity loaded. Set a local port to start forwarding.')
+        toast.success('Identity loaded. Set a local port to start forwarding.')
       } else if (!nextSession.ownerEmail) {
         // Brand-new identity: offer Google verification before subdomain setup.
         setStep('gate')
-        setInfoMessage('Identity created. Verify with Google or continue as guest.')
+        toast.success('Identity created. Verify with Google or continue as guest.')
       } else {
         setStep('subdomain')
-        setInfoMessage('Identity created. Reserve your subdomain to continue.')
+        toast.success('Identity created. Reserve your subdomain to continue.')
       }
     } catch (error) {
       setConnState('disconnected')
-      setErrorMessage(extractError(error))
+      toast.error(extractError(error))
       setStatusMessage('Could not reach the PortShare API.')
     } finally {
       setIsBusy(false)
@@ -327,13 +324,13 @@ export default function App() {
   const startGoogleVerify = useCallback(async (): Promise<void> => {
     if (!session || verifying) return
     if (!gauthEnabled) {
-      setErrorMessage('Google verification is not enabled on this server.')
+      toast.error('Google verification is not enabled on this server.')
       return
     }
     const attempt = ++verifyAttempt.current
     setVerifying(true)
-    setErrorMessage('')
-    setInfoMessage('Complete Google sign-in in your browser…')
+    toast.error('')
+    toast.success('Complete Google sign-in in your browser…')
     window.open(googleLinkLoginUrl(session.id), '_blank', 'noopener')
     const deadline = Date.now() + 5 * 60 * 1000
     try {
@@ -341,7 +338,7 @@ export default function App() {
         await new Promise(r => setTimeout(r, 2000))
         if (verifyAttempt.current !== attempt) return
         if (Date.now() > deadline) {
-          setErrorMessage('Verification timed out. Please try again.')
+          toast.error('Verification timed out. Please try again.')
           return
         }
         try {
@@ -356,7 +353,7 @@ export default function App() {
             setSubdomainInput(fresh.subdomain)
             setDomainInput(fresh.customDomain)
             toast.success('Verified! 1 GB bandwidth unlocked')
-            setInfoMessage('Google linked — 1 GB bandwidth unlocked.')
+            toast.success('Google linked — 1 GB bandwidth unlocked.')
             setStep(cur => cur === 'gate' ? (fresh.subdomain ? 'dashboard' : 'subdomain') : cur)
             return
           }
@@ -372,7 +369,7 @@ export default function App() {
   const skipGate = useCallback(() => {
     verifyAttempt.current += 1
     setVerifying(false)
-    setInfoMessage('Continuing as guest with 100 MB bandwidth. Verify anytime for 1 GB free.')
+    toast.success('Continuing as guest with 100 MB bandwidth. Verify anytime for 1 GB free.')
     setStep(cur => {
       if (cur !== 'gate') return cur
       return session?.subdomain ? 'dashboard' : 'subdomain'
@@ -381,7 +378,7 @@ export default function App() {
 
   const applyPort = async (port: number) => {
     if (!session) return
-    setIsBusy(true); setErrorMessage(''); setInfoMessage('Updating exposed port...')
+    setIsBusy(true); toast.error(''); toast.success('Updating exposed port...')
     try {
       const next = await updateExposedPort(session.id, port)
       tunnelPort.current = next
@@ -676,7 +673,7 @@ export default function App() {
         {step === 'loading' && (
           <LoadingScreen
             statusMessage={statusMessage}
-            errorMessage={errorMessage}
+            errorMessage={""}
             onRetry={() => void bootstrapClient()}
             theme={theme}
             onToggleTheme={toggleTheme}
@@ -740,7 +737,7 @@ export default function App() {
                   const name = normalizeSubdomain(subdomain)
                   const availability = await checkSubdomainAvailability(name)
                   if (!availability.available) {
-                    setErrorMessage('That subdomain is already taken or reserved.')
+                    toast.error('That subdomain is already taken or reserved.')
                     return
                   }
                   const created = await createTunnel(session.id, {

@@ -43,7 +43,7 @@ export function createTunnelConnection({ apiBaseUrl, clientId, tunnelId, tunnelT
       tunnelUrl,
       tunnelType,
       port: portRef.current ?? 3000
-    } as unknown)
+    } as any)
     
     return {
       close: () => {
