@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
-const { YamuxSession } = require('yamux-js');
+const { createWebSocketStream } = require('ws');
+const { Server } = require('yamux-js');
 const net = require('node:net');
 
 let currentSession = null;
@@ -16,34 +17,12 @@ function connectTunnel({ tunnelUrl, tunnelType, getPort, onLogEntry, onStateChan
   const ws = new WebSocket(tunnelUrl);
   currentWs = ws;
   ws.binaryType = 'arraybuffer';
-  
-  // Custom WebSocket wrapper that looks like a Node stream
-  const wsStream = {
-    write(data) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
-      }
-    },
-    onData(cb) {
-      ws.on('message', (data) => cb(new Uint8Array(data)));
-    },
-    onClose(cb) {
-      ws.on('close', cb);
-    },
-    close() {
-      ws.close();
-    }
-  };
-
   ws.on('open', () => {
     onStateChange('connected', 'Yamux tunnel connected');
     
-    // Create the Yamux session
-    // Since the server acts as Yamux Client, the desktop acts as Yamux Server
-    const session = new YamuxSession(wsStream, { isClient: false });
-    currentSession = session;
+    const duplex = createWebSocketStream(ws);
     
-    session.on('stream', (stream) => {
+    const session = new Server((stream) => {
       const port = getPort();
       if (!port) {
         stream.close();
@@ -167,6 +146,9 @@ function connectTunnel({ tunnelUrl, tunnelType, getPort, onLogEntry, onStateChan
       localSocket.on('error', () => stream.close());
       stream.on('error', () => localSocket.destroy());
     });
+    
+    currentSession = session;
+    duplex.pipe(session).pipe(duplex);
   });
   
   ws.on('close', () => {
