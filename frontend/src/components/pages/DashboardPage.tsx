@@ -4,7 +4,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { ClientSession, ConnectionState, RequestLogEntry, UsagePoint } from '../../lib/api'
 import { ROOT_DOMAIN, tierOf } from '../../lib/api'
 import NewTunnelModal from '../modals/NewTunnelModal'
-import TunnelConsole from '../dashboard/TunnelConsole'
+
 
 type Props = {
   session: ClientSession | null
@@ -89,14 +89,14 @@ export default function DashboardPage({
       </div>
 
       <div className="ps-page-content">
-        {/* ── Tunnel Card ── */}
-        <div className={`ps-tunnel-card ${connState === 'connected' ? 'tunnel-connected' : ''} animate-fade-up`}>
-
-          {/* URL row */}
-          <div className="ps-tunnel-card-header">
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {publicUrl ? (
-                <div
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px', alignItems: 'flex-start', marginBottom: 16 }}>
+          {/* ── Left Column: Tunnel Config ── */}
+          <div className={`ps-tunnel-card ${connState === 'connected' ? 'tunnel-connected' : ''} animate-fade-up`}>
+            {/* URL row */}
+            <div className="ps-tunnel-card-header">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {publicUrl ? (
+                  <div
                   className="ps-tunnel-url"
                   onClick={onCopyUrl}
                   title="Click to copy"
@@ -119,7 +119,6 @@ export default function DashboardPage({
             <span className={`ps-badge ${badge.cls}`}>{badge.label}</span>
           </div>
 
-          {/* Port + Auth — core controls, always visible */}
           <div className="ps-tunnel-card-body">
             <form onSubmit={onPortSubmit}>
               <div className="ps-input-wrap">
@@ -130,14 +129,16 @@ export default function DashboardPage({
                     <input
                       className="ps-input ps-input-mono"
                       value={portInput}
-                      onChange={e => setPortInput(e.target.value)}
+                      onChange={e => setPortInput(e.target.value.replace(/\D/g, ''))}
                       placeholder="3000"
-                      type="number"
-                      min={1}
-                      max={65535}
+                      disabled={isBusy}
                     />
                   </div>
-                  <button type="submit" className="ps-btn ps-btn-secondary ps-btn-sm" disabled={isBusy}>
+                  <button
+                    type="submit"
+                    className="ps-btn ps-btn-secondary"
+                    disabled={isBusy}
+                  >
                     Apply
                   </button>
                 </div>
@@ -151,67 +152,71 @@ export default function DashboardPage({
 
             {/* Google Auth toggle */}
             {gauthEnabled && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Lock size={14} style={{ color: session?.requireAuth ? 'var(--cyan)' : 'var(--text-muted)' }} />
-                    Auth wall
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Lock size={14} style={{ color: session?.requireAuth ? 'var(--cyan)' : 'var(--text-muted)' }} />
+                      Auth wall
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-soft)', marginTop: 2, paddingLeft: 20 }}>
+                      {session?.requireAuth ? 'Requires Google sign-in' : 'Public access'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-soft)', marginTop: 2, paddingLeft: 20 }}>
-                    {session?.requireAuth ? 'Requires Google sign-in' : 'Public access'}
-                  </div>
+                  <label className="ps-toggle">
+                    <input
+                      type="checkbox"
+                      checked={session?.requireAuth ?? false}
+                      onChange={onAuthToggle}
+                      disabled={isBusy}
+                    />
+                    <div className="ps-toggle-track" />
+                  </label>
                 </div>
-                <label className="ps-toggle">
-                  <input
-                    type="checkbox"
-                    checked={session?.requireAuth ?? false}
-                    onChange={onAuthToggle}
-                    disabled={isBusy}
-                  />
-                  <div className="ps-toggle-track" />
-                </label>
+              )}
+            </div>
+
+            {/* Stats bar — trimmed to 3 key metrics */}
+            <div className="ps-tunnel-card-stats" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div className="ps-tunnel-stat">
+                <span className="ps-tunnel-stat-label"><ArrowRightLeft size={11} /> Requests</span>
+                <span className="ps-tunnel-stat-value">{totalRequests.toLocaleString()}</span>
               </div>
-            )}
+              <div className="ps-tunnel-stat">
+                <span className="ps-tunnel-stat-label"><BarChart3 size={11} /> Transferred</span>
+                <span className="ps-tunnel-stat-value">{formatBytes(bytesIn + bytesOut)}</span>
+              </div>
+              <div className="ps-tunnel-stat">
+                <span className="ps-tunnel-stat-label"><Clock size={11} /> Uptime</span>
+                <span className="ps-tunnel-stat-value">{connState === 'connected' ? formatUptime(uptimeSeconds) : '—'}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Stats bar — trimmed to 3 key metrics */}
-          <div className="ps-tunnel-card-stats" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-            <div className="ps-tunnel-stat">
-              <span className="ps-tunnel-stat-label"><ArrowRightLeft size={11} /> Requests</span>
-              <span className="ps-tunnel-stat-value">{totalRequests.toLocaleString()}</span>
-            </div>
-            <div className="ps-tunnel-stat">
-              <span className="ps-tunnel-stat-label"><BarChart3 size={11} /> Transferred</span>
-              <span className="ps-tunnel-stat-value">{formatBytes(bytesIn + bytesOut)}</span>
-            </div>
-            <div className="ps-tunnel-stat">
-              <span className="ps-tunnel-stat-label"><Clock size={11} /> Uptime</span>
-              <span className="ps-tunnel-stat-value">{connState === 'connected' ? formatUptime(uptimeSeconds) : '—'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Bandwidth ── */}
-        {session && (
-          <div className="ps-card animate-fade-up delay-100" style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted)' }}>Bandwidth</span>
-                {tier && (
-                  <span className="ps-badge ps-badge-gray" style={{ marginLeft: 8 }}>{TIER_LABEL[tier]}</span>
-                )}
+          {/* ── Right Column: Bandwidth ── */}
+          {session && (
+            <div className="ps-card animate-fade-up delay-100" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted)' }}>Bandwidth</span>
+                  {tier && (
+                    <span className="ps-badge ps-badge-gray" style={{ marginLeft: 8 }}>{TIER_LABEL[tier]}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 11, fontFamily: 'var(--mono-font)', color: 'var(--text-soft)' }}>
+                  {formatBytes(session.bandwidthUsed)} / {formatBytes(session.bandwidthLimit)}
+                </span>
               </div>
-              <span style={{ fontSize: 11, fontFamily: 'var(--mono-font)', color: 'var(--text-soft)' }}>
-                {formatBytes(session.bandwidthUsed)} / {formatBytes(session.bandwidthLimit)}
-              </span>
-            </div>
-            <div className="ps-bandwidth-bar">
-              <div className="ps-bandwidth-fill" style={{ width: `${bwPct}%` }} />
-            </div>
-            {dailyUsage.length > 0 && (
-              <div style={{ height: 56, marginTop: 12, width: '100%' }}>
+              <div className="ps-bandwidth-bar">
+                <div className="ps-bandwidth-fill" style={{ width: `${bwPct}%` }} />
+              </div>
+              
+              <div style={{ height: 70, marginTop: 16, width: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={[...dailyUsage].reverse().map(p => ({ time: p.period, bytes: p.totalBytes }))}>
+                  <AreaChart data={
+                    dailyUsage.length > 0 
+                      ? [...dailyUsage].reverse().map(p => ({ time: p.period, bytes: p.totalBytes }))
+                      : Array.from({ length: 7 }).map((_, i) => ({ time: `Day ${i}`, bytes: 0 }))
+                  }>
                     <defs>
                       <linearGradient id="colorBw" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.2}/>
@@ -219,7 +224,7 @@ export default function DashboardPage({
                       </linearGradient>
                     </defs>
                     <Tooltip
-                      contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
+                      contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       itemStyle={{ color: 'var(--text)' }}
                       formatter={(val: any) => [formatBytes(Number(val)), 'Traffic']}
                       labelStyle={{ color: 'var(--text-soft)', marginBottom: 4 }}
@@ -228,22 +233,14 @@ export default function DashboardPage({
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            )}
-            <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-soft)' }}>
-              {(100 - bwPct).toFixed(1)}% remaining this period
+              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-soft)', textAlign: 'right' }}>
+                {(100 - bwPct).toFixed(1)}% remaining this period
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* ── Live console ── */}
-        {session?.subdomain && (!tunnelType || tunnelType === 'http' || tunnelType === 'tcp' || tunnelType === 'udp') && (
-          <TunnelConsole
-            connState={connState}
-            port={portInput}
-            publicUrl={publicUrl ?? ''}
-            requestLog={requestLog}
-          />
-        )}
+
 
         {/* ── E2E CLI info ── */}
         {session?.subdomain && tunnelType === 'e2e' && (
