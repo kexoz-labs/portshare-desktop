@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Sparkles, CheckCircle2, Shield, X, Rocket } from 'lucide-react'
 import { API_BASE_URL } from '../../lib/api'
 
 type Plan = {
@@ -88,10 +89,15 @@ export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props
       <div className="ps-modal upgrade-modal">
         <div className="ps-modal-header">
           <div>
-            <div className="ps-modal-title">Upgrade plan</div>
+            <div className="ps-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Rocket size={18} style={{ color: 'var(--accent)' }} />
+              Upgrade plan
+            </div>
             <div className="ps-tunnel-card-subtitle">Month-to-month. Cancel anytime.</div>
           </div>
-          <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={onClose}>✕</button>
+          <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={onClose} style={{ padding: 4 }}>
+            <X size={16} />
+          </button>
         </div>
 
         <div className="upgrade-modal-body">
@@ -128,14 +134,14 @@ export default function UpgradeModal({ currentPlan, onClose, onCheckout }: Props
                     <ul className="upgrade-plan-features">
                       {plan.features.map(f => (
                         <li key={f}>
-                          <span style={{ color: 'var(--green)', fontSize: 11, marginRight: 6, fontWeight: 700 }}>✓</span>
+                          <CheckCircle2 size={13} style={{ color: 'var(--green)', marginRight: 6, flexShrink: 0 }} />
                           {f}
                         </li>
                       ))}
                     </ul>
                     {isCurrent ? (
                       <div className="upgrade-plan-current">
-                        <span style={{ color: 'var(--green)', marginRight: 6 }}>✓</span> Active plan
+                        <Shield size={14} style={{ color: 'var(--green)', marginRight: 6 }} /> Active plan
                       </div>
                     ) : (
                       <button

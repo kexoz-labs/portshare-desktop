@@ -1,3 +1,4 @@
+import { LayoutDashboard, Network, Activity, Globe, Settings, LogOut, LogIn } from 'lucide-react'
 import type { ConnectionState } from '../../lib/api'
 import Logo from '../ui/Logo'
 
@@ -15,12 +16,12 @@ type Props = {
   connState: ConnectionState
 }
 
-const navItems: { id: Page; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'tunnels',   label: 'Tunnels'   },
-  { id: 'requests',  label: 'Requests'  },
-  { id: 'domains',   label: 'Domains'   },
-  { id: 'settings',  label: 'Settings'  },
+const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'tunnels',   label: 'Tunnels',   icon: Network         },
+  { id: 'requests',  label: 'Requests',  icon: Activity        },
+  { id: 'domains',   label: 'Domains',   icon: Globe           },
+  { id: 'settings',  label: 'Settings',  icon: Settings        },
 ]
 
 const connLabel: Record<ConnectionState, string> = {
@@ -53,12 +54,13 @@ export default function Sidebar({ activePage, onNavigate, requestCount, ownerEma
 
       {/* Navigation */}
       <nav className="ps-nav" style={{ flex: 1 }}>
-        {navItems.map(({ id, label }) => (
+        {navItems.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             className={`ps-nav-item ${activePage === id ? 'active' : ''}`}
             onClick={() => onNavigate(id)}
           >
+            <Icon size={16} className="ps-nav-icon" />
             {label}
             {id === 'requests' && requestCount > 0 && (
               <span className="ps-nav-badge">{requestCount}</span>
@@ -112,6 +114,7 @@ export default function Sidebar({ activePage, onNavigate, requestCount, ownerEma
               style={{ width: '100%', justifyContent: 'center' }}
               onClick={onLogout}
             >
+              <LogOut size={13} style={{ marginRight: 6 }} />
               Sign out
             </button>
           </div>
@@ -121,6 +124,7 @@ export default function Sidebar({ activePage, onNavigate, requestCount, ownerEma
             style={{ width: '100%', justifyContent: 'center' }}
             onClick={onLogin}
           >
+            <LogIn size={13} style={{ marginRight: 6 }} />
             Sign in with Google
           </button>
         )}

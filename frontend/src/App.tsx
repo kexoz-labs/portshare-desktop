@@ -23,7 +23,6 @@ import { useRequestLog } from './hooks/useRequestLog'
 
 import AppShell from './components/layout/AppShell'
 import Sidebar from './components/layout/Sidebar'
-import FeedbackBanner from './components/ui/FeedbackBanner'
 import LoadingScreen from './components/screens/LoadingScreen'
 import GateScreen from './components/screens/GateScreen'
 import SubdomainScreen from './components/screens/SubdomainScreen'
@@ -47,8 +46,6 @@ export default function App() {
   const [domainInput, setDomainInput] = useState('')
 
   const [statusMessage, setStatusMessage] = useState('Starting secure tunnel client...')
-  const [infoMessage, setInfoMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
   const [isBusy, setIsBusy] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [connState, setConnState] = useState<ConnectionState>('idle')
@@ -79,14 +76,7 @@ export default function App() {
   const { theme, toggleTheme } = useTheme()
   const { requestLog, totalRequests, retention, setRetention, addLogEntry, clearLog } = useRequestLog()
 
-  useEffect(() => {
-    if (!infoMessage && !errorMessage) return
-    const timer = window.setTimeout(() => {
-      setInfoMessage('')
-      setErrorMessage('')
-    }, errorMessage ? 6000 : 4000)
-    return () => window.clearTimeout(timer)
-  }, [infoMessage, errorMessage])
+  // Info and Error states removed in favor of toast
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -405,10 +395,9 @@ export default function App() {
         const selected = persistentTunnels.find(tunnel => tunnel.id === selectedTunnelId)
         if (selected) void updateTunnel(session.id, { ...selected, port: next })
       }
-      setInfoMessage(`localhost:${next} is now routed to your public URL.`)
       toast.success(`Forwarding localhost:${next}`)
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally { setIsBusy(false) }
   }
 
@@ -417,14 +406,14 @@ export default function App() {
     if (!session) return
     const name = normalizeSubdomain(subdomainInput)
     if (name.length < 3 || name.length > 32) {
-      setErrorMessage('Subdomain must be 3–32 characters using letters, numbers, or hyphens.')
+      toast.error('Subdomain must be 3–32 characters using letters, numbers, or hyphens.')
       return
     }
-    setIsBusy(true); setErrorMessage(''); setInfoMessage('Checking subdomain availability...')
+    setIsBusy(true)
     try {
       const availability = await checkSubdomainAvailability(name)
       if (!availability.available) {
-        setErrorMessage(availability.reserved
+        toast.error(availability.reserved
           ? 'That subdomain is reserved for PortShare infrastructure. Try another one.'
           : 'That subdomain is already taken. Try another one.')
         return
@@ -432,9 +421,9 @@ export default function App() {
       await claimSubdomain(session.id, name)
       setSession(cur => cur ? { ...cur, subdomain: name } : cur)
       setStep('dashboard')
-      setInfoMessage('Subdomain reserved. Set a local port to go live.')
+      toast.success('Subdomain reserved.')
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally { setIsBusy(false) }
   }
 
@@ -442,7 +431,7 @@ export default function App() {
     e.preventDefault()
     const p = Number(portInput)
     if (!Number.isInteger(p) || p < 1 || p > 65535) {
-      setErrorMessage('Enter a valid TCP port between 1 and 65535.')
+      toast.error('Enter a valid TCP port between 1 and 65535.')
       return
     }
     await applyPort(p)
@@ -451,7 +440,7 @@ export default function App() {
   const handleDomainSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!session || !domainInput.trim()) return
-    setIsBusy(true); setErrorMessage(''); setInfoMessage('Mapping your domain...')
+    setIsBusy(true)
     try {
       const customDomain = await updateCustomDomain(session.id, domainInput.trim())
       setSession(cur => cur ? { ...cur, customDomain } : cur)
@@ -463,17 +452,16 @@ export default function App() {
           setPersistentTunnels(current => current.map(tunnel => tunnel.id === updated.id ? updated : tunnel))
         }
       }
-      setInfoMessage('Domain mapped. Add a CNAME pointing to your PortShare hostname.')
       toast.success('Custom domain mapped')
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally { setIsBusy(false) }
   }
 
   const handleAuthToggle = async () => {
     if (!session) return
     const next = !session.requireAuth
-    setIsBusy(true); setErrorMessage(''); setInfoMessage('')
+    setIsBusy(true)
     try {
       const result = await updateClientAuth(session.id, next)
       setSession(cur => cur ? { ...cur, requireAuth: result.requireAuth } : cur)
@@ -485,12 +473,9 @@ export default function App() {
         }
       }
       setGauthEnabled(result.gauthEnabled)
-      setInfoMessage(result.requireAuth
-        ? 'Google Auth wall enabled — visitors must sign in with Google.'
-        : 'Google Auth wall disabled — tunnel is publicly accessible.')
       toast.success(result.requireAuth ? 'Auth wall enabled' : 'Auth wall disabled')
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally { setIsBusy(false) }
   }
 
@@ -517,7 +502,7 @@ export default function App() {
       tunnelClose.current = connection.close
     }
     void checkListening(tunnel.port)
-    setInfoMessage(`Selected ${tunnel.subdomain}.${ROOT_DOMAIN}.`)
+    toast.success(`Selected ${tunnel.subdomain}.${ROOT_DOMAIN}.`)
   }
 
   const startPersistentTunnel = async (tunnel: PersistentTunnel) => {
@@ -528,9 +513,9 @@ export default function App() {
       const updated = await updateTunnel(session.id, { ...tunnel, active: true })
       setPersistentTunnels(current => current.map(item => item.id === updated.id ? updated : item))
       openTunnelConnection(session.id, updated.id, updated.port, updated.pathRoutes, updated.tunnelType)
-      setInfoMessage(`Starting ${updated.subdomain}.${ROOT_DOMAIN}...`)
+      toast.success(`Starting ${updated.subdomain}.${ROOT_DOMAIN}...`)
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally {
       setIsBusy(false)
     }
@@ -549,9 +534,9 @@ export default function App() {
         setConnState('idle')
         setConnectedAt(null)
       }
-      setInfoMessage(`${tunnel.subdomain}.${ROOT_DOMAIN} is stopped.`)
+      toast.success(`${tunnel.subdomain}.${ROOT_DOMAIN} is stopped.`)
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally {
       setIsBusy(false)
     }
@@ -570,9 +555,9 @@ export default function App() {
       tunnelConnections.current.get(tunnel.id)?.close()
       tunnelConnections.current.delete(tunnel.id)
       setPersistentTunnels(current => current.filter(item => item.id !== tunnel.id))
-      setInfoMessage('Tunnel deleted.')
+      toast.success('Tunnel deleted.')
     } catch (err) {
-      setErrorMessage(extractError(err))
+      toast.error(extractError(err))
     } finally {
       setIsBusy(false)
     }
@@ -611,7 +596,7 @@ export default function App() {
       }
       if (!created.length) throw new Error('No valid tunnel configurations were found.')
       setPersistentTunnels(current => [...current, ...created])
-      toast.success(`${created.length} tunnel${created.length === 1 ? '' : 's'} imported`)
+      toast.success(`Imported ${created.length} tunnels.`)
     } catch (err) {
       toast.error(extractError(err))
     } finally {
@@ -635,9 +620,9 @@ export default function App() {
     if (!session) return
     try {
       await navigator.clipboard.writeText(session.id)
-      toast.success('Client ID copied')
-    } catch {
-      toast.error('Could not copy client ID')
+      toast.success('Client ID copied to clipboard')
+    } catch (err) {
+      toast.error('Could not copy Client ID')
     }
   }
 
@@ -736,9 +721,6 @@ export default function App() {
                 portInput={portInput}
                 setPortInput={setPortInput}
                 onPortSubmit={handlePortSubmit}
-                domainInput={domainInput}
-                setDomainInput={setDomainInput}
-                onDomainSubmit={handleDomainSubmit}
                 gauthEnabled={gauthEnabled}
                 onAuthToggle={handleAuthToggle}
                 isBusy={isBusy}
@@ -749,12 +731,7 @@ export default function App() {
                 bytesIn={bytesIn}
                 bytesOut={bytesOut}
                 dailyUsage={dailyUsage}
-                monthlyUsage={monthlyUsage}
                 portListening={portListening}
-                routeRules={routeRules}
-                onRouteRulesChange={setRouteRules}
-                routePortStatus={routePortStatus}
-                statusMessage={statusMessage}
                 uptimeSeconds={uptimeSeconds}
                 showNewTunnel={showNewTunnel}
                 onOpenNewTunnel={() => setShowNewTunnel(true)}
@@ -854,7 +831,7 @@ export default function App() {
               />
             )}
 
-            <FeedbackBanner infoMessage={infoMessage} errorMessage={errorMessage} />
+            <Toaster position="bottom-right" toastOptions={{ style: { background: 'var(--bg-elevated)', color: 'var(--text)', border: '1px solid var(--border)' } }} />
           </>
         )}
       </AppShell>

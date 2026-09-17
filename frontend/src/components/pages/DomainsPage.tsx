@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Globe, Plus, Trash2, CheckCircle, Clock, XCircle, Copy, X, Sparkles } from 'lucide-react'
 import type { ClientSession } from '../../lib/api'
 import { ROOT_DOMAIN } from '../../lib/api'
 
@@ -53,6 +54,7 @@ export default function DomainsPage({ session, domainInput, setDomainInput, onDo
         </div>
         <div className="ps-header-actions">
           <button className="ps-btn ps-btn-primary ps-btn-sm" onClick={() => setShowAddCustom(true)}>
+            <Plus size={13} style={{ marginRight: 4 }} />
             Add custom domain
           </button>
         </div>
@@ -63,6 +65,7 @@ export default function DomainsPage({ session, domainInput, setDomainInput, onDo
         <div className="ps-card animate-fade-up">
           {domains.length === 0 ? (
             <div className="ps-empty">
+              <Globe size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
               <span className="ps-empty-title">No domains configured</span>
               <span className="ps-empty-sub">Your PortShare subdomain will appear here once you connect a tunnel.</span>
             </div>
@@ -85,6 +88,7 @@ export default function DomainsPage({ session, domainInput, setDomainInput, onDo
                     className="ps-btn ps-btn-ghost ps-btn-sm"
                     onClick={() => void navigator.clipboard.writeText(`https://${domain.name}`)}
                   >
+                    <Copy size={13} style={{ marginRight: 4 }} />
                     Copy URL
                   </button>
                 </div>
@@ -118,7 +122,10 @@ export default function DomainsPage({ session, domainInput, setDomainInput, onDo
 
         {/* Info card for Pro feature */}
         <div className="ps-card animate-fade-up delay-150" style={{ padding: '16px 20px' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Custom domains require Pro</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Sparkles size={14} style={{ color: 'var(--cyan)' }} />
+            Custom domains require Pro
+          </div>
           <p style={{ fontSize: 12, color: 'var(--text-soft)', lineHeight: 1.6 }}>
             Map any domain you own to your PortShare tunnel — no server needed.
             Upgrade to Pro to enable custom domain mapping with automatic CNAME routing.
@@ -132,7 +139,9 @@ export default function DomainsPage({ session, domainInput, setDomainInput, onDo
           <div className="ps-modal" onClick={e => e.stopPropagation()}>
             <div className="ps-modal-header">
               <span className="ps-modal-title">Add custom domain</span>
-              <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={() => setShowAddCustom(false)}>✕</button>
+              <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={() => setShowAddCustom(false)} style={{ padding: 4 }}>
+                <X size={14} />
+              </button>
             </div>
             <form onSubmit={e => { onDomainSubmit(e); setShowAddCustom(false) }}>
               <div className="ps-modal-body">

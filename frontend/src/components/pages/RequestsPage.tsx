@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Trash2, Search, Copy, Download, MousePointerClick, ArrowRightLeft } from 'lucide-react'
 import type { RequestLogEntry } from '../../lib/api'
 import { isNoiseRequestPath } from '../../lib/tunnel'
 
@@ -124,6 +125,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                 {showFrameworkRequests ? 'Hide assets' : 'Show assets'}
               </button>
               <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={onClear} style={{ color: 'var(--red)' }}>
+                <Trash2 size={13} style={{ marginRight: 4 }} />
                 Clear
               </button>
             </div>
@@ -131,6 +133,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
 
           <div className="ps-req-filters">
             <div className="ps-req-search">
+              <Search size={14} className="ps-req-search-icon" />
               <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search path…" />
             </div>
             <select value={methodFilter} onChange={event => setMethodFilter(event.target.value)}>
@@ -152,6 +155,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
 
           {displayLog.length === 0 ? (
             <div className="ps-empty" style={{ flex: 1 }}>
+              <ArrowRightLeft size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
               <span className="ps-empty-title">No requests yet</span>
               <span className="ps-empty-sub">Make a request to your tunnel URL to see it appear here.</span>
             </div>
@@ -195,9 +199,11 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                   </span>
                 )}
                 <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={() => void copyCurl()}>
+                  <Copy size={13} style={{ marginRight: 4 }} />
                   {copied ? 'Copied' : 'Copy curl'}
                 </button>
                 <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={exportCurl}>
+                  <Download size={13} style={{ marginRight: 4 }} />
                   Export .sh
                 </button>
               </div>
@@ -297,6 +303,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
             </>
           ) : (
             <div className="ps-empty" style={{ flex: 1 }}>
+              <MousePointerClick size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
               <span className="ps-empty-title">Select a request</span>
               <span className="ps-empty-sub">Click any request in the list to inspect headers, body, and timing.</span>
             </div>

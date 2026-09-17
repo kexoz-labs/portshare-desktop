@@ -1,10 +1,10 @@
 import { type FormEvent } from 'react'
+import { Plus, Copy, Lock, ShieldAlert, BarChart3, Clock, ArrowRightLeft } from 'lucide-react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { ClientSession, ConnectionState, RequestLogEntry, UsagePoint } from '../../lib/api'
 import { ROOT_DOMAIN, tierOf } from '../../lib/api'
 import NewTunnelModal from '../modals/NewTunnelModal'
 import TunnelConsole from '../dashboard/TunnelConsole'
-import RouteRulesEditor from '../dashboard/RouteRulesEditor'
 
 type Props = {
   session: ClientSession | null
@@ -12,9 +12,6 @@ type Props = {
   portInput: string
   setPortInput: (v: string) => void
   onPortSubmit: (e: FormEvent<HTMLFormElement>) => void
-  domainInput: string
-  setDomainInput: (v: string) => void
-  onDomainSubmit: (e: FormEvent<HTMLFormElement>) => void
   gauthEnabled: boolean
   onAuthToggle: () => void
   isBusy: boolean
@@ -25,12 +22,7 @@ type Props = {
   bytesIn: number
   bytesOut: number
   dailyUsage: UsagePoint[]
-  monthlyUsage: UsagePoint[]
   portListening: boolean | null
-  routeRules: Array<{ path: string; port: number }>
-  onRouteRulesChange: (rules: Array<{ path: string; port: number }>) => void
-  routePortStatus: Record<number, boolean | null>
-  statusMessage: string
   uptimeSeconds: number
   showNewTunnel: boolean
   onOpenNewTunnel: () => void
@@ -62,10 +54,9 @@ const connBadge: Record<ConnectionState, { label: string; cls: string }> = {
 
 export default function DashboardPage({
   session, connState, portInput, setPortInput, onPortSubmit,
-  domainInput, setDomainInput, onDomainSubmit,
   gauthEnabled, onAuthToggle, isBusy,
   totalRequests, onCopyUrl, copyFeedback, requestLog, bytesIn, bytesOut, dailyUsage,
-  portListening, routeRules, onRouteRulesChange, routePortStatus, uptimeSeconds,
+  portListening, uptimeSeconds,
   showNewTunnel, onOpenNewTunnel, onCloseNewTunnel, onCreateTunnel, tunnelType,
 }: Props) {
   const publicUrl = session?.subdomain
@@ -91,6 +82,7 @@ export default function DashboardPage({
         </div>
         <div className="ps-header-actions">
           <button className="ps-btn ps-btn-primary ps-btn-sm" onClick={onOpenNewTunnel}>
+            <Plus size={13} style={{ marginRight: 4 }} />
             New tunnel
           </button>
         </div>
@@ -113,7 +105,8 @@ export default function DashboardPage({
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {publicUrl}
                   </span>
-                  <span style={{ fontSize: 11, color: copyFeedback === 'copied' ? 'var(--green)' : 'var(--text-soft)', flexShrink: 0, marginLeft: 4 }}>
+                  <span style={{ fontSize: 11, color: copyFeedback === 'copied' ? 'var(--green)' : 'var(--text-soft)', flexShrink: 0, marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Copy size={11} />
                     {copyFeedback === 'copied' ? 'Copied' : 'Copy'}
                   </span>
                 </div>
@@ -126,65 +119,46 @@ export default function DashboardPage({
             <span className={`ps-badge ${badge.cls}`}>{badge.label}</span>
           </div>
 
-          {/* Port + Domain + Auth — always visible, clean layout */}
+          {/* Port + Auth — core controls, always visible */}
           <div className="ps-tunnel-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {/* Local port */}
-              <form onSubmit={onPortSubmit}>
-                <div className="ps-input-wrap">
-                  <label className="ps-label">Local port</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <div className="ps-input-group" style={{ flex: 1 }}>
-                      <span className="ps-input-prefix">:</span>
-                      <input
-                        className="ps-input ps-input-mono"
-                        value={portInput}
-                        onChange={e => setPortInput(e.target.value)}
-                        placeholder="3000"
-                        type="number"
-                        min={1}
-                        max={65535}
-                      />
-                    </div>
-                    <button type="submit" className="ps-btn ps-btn-secondary ps-btn-sm" disabled={isBusy}>
-                      Apply
-                    </button>
-                  </div>
-                  {portListening !== null && (
-                    <span className={`ps-port-status ${portListening ? 'listening' : 'offline'}`} style={{ marginTop: 4 }}>
-                      {portListening ? 'Listening' : 'Not listening'}
-                    </span>
-                  )}
-                </div>
-              </form>
-
-              {/* Custom domain */}
-              <form onSubmit={onDomainSubmit}>
-                <div className="ps-input-wrap">
-                  <label className="ps-label">Custom domain</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
+            <form onSubmit={onPortSubmit}>
+              <div className="ps-input-wrap">
+                <label className="ps-label">Local port</label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <div className="ps-input-group" style={{ flex: 1 }}>
+                    <span className="ps-input-prefix">:</span>
                     <input
-                      className="ps-input"
-                      style={{ flex: 1 }}
-                      value={domainInput}
-                      onChange={e => setDomainInput(e.target.value)}
-                      placeholder="tunnel.yourdomain.com"
+                      className="ps-input ps-input-mono"
+                      value={portInput}
+                      onChange={e => setPortInput(e.target.value)}
+                      placeholder="3000"
+                      type="number"
+                      min={1}
+                      max={65535}
                     />
-                    <button type="submit" className="ps-btn ps-btn-secondary ps-btn-sm" disabled={isBusy}>
-                      Map
-                    </button>
                   </div>
+                  <button type="submit" className="ps-btn ps-btn-secondary ps-btn-sm" disabled={isBusy}>
+                    Apply
+                  </button>
                 </div>
-              </form>
-            </div>
+                {portListening !== null && (
+                  <span className={`ps-port-status ${portListening ? 'listening' : 'offline'}`} style={{ marginTop: 4 }}>
+                    {portListening ? 'Listening' : 'Not listening'}
+                  </span>
+                )}
+              </div>
+            </form>
 
             {/* Google Auth toggle */}
             {gauthEnabled && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Google Auth Wall</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-soft)', marginTop: 2 }}>
-                    {session?.requireAuth ? 'Visitors must sign in with Google' : 'Tunnel is publicly accessible'}
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Lock size={14} style={{ color: session?.requireAuth ? 'var(--cyan)' : 'var(--text-muted)' }} />
+                    Auth wall
+                  </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-soft)', marginTop: 2, paddingLeft: 20 }}>
+                    {session?.requireAuth ? 'Requires Google sign-in' : 'Public access'}
                   </div>
                 </div>
                 <label className="ps-toggle">
@@ -198,25 +172,20 @@ export default function DashboardPage({
                 </label>
               </div>
             )}
-
-            {/* Route rules for http tunnels */}
-            {(!tunnelType || tunnelType === 'http') && (
-              <RouteRulesEditor rules={routeRules} onChange={onRouteRulesChange} portStatus={routePortStatus} />
-            )}
           </div>
 
           {/* Stats bar — trimmed to 3 key metrics */}
           <div className="ps-tunnel-card-stats" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div className="ps-tunnel-stat">
-              <span className="ps-tunnel-stat-label">Requests</span>
+              <span className="ps-tunnel-stat-label"><ArrowRightLeft size={11} /> Requests</span>
               <span className="ps-tunnel-stat-value">{totalRequests.toLocaleString()}</span>
             </div>
             <div className="ps-tunnel-stat">
-              <span className="ps-tunnel-stat-label">Transferred</span>
+              <span className="ps-tunnel-stat-label"><BarChart3 size={11} /> Transferred</span>
               <span className="ps-tunnel-stat-value">{formatBytes(bytesIn + bytesOut)}</span>
             </div>
             <div className="ps-tunnel-stat">
-              <span className="ps-tunnel-stat-label">Uptime</span>
+              <span className="ps-tunnel-stat-label"><Clock size={11} /> Uptime</span>
               <span className="ps-tunnel-stat-value">{connState === 'connected' ? formatUptime(uptimeSeconds) : '—'}</span>
             </div>
           </div>
@@ -279,7 +248,8 @@ export default function DashboardPage({
         {/* ── E2E CLI info ── */}
         {session?.subdomain && tunnelType === 'e2e' && (
           <div className="ps-card animate-fade-up delay-100" style={{ padding: '16px 20px' }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ShieldAlert size={14} style={{ color: 'var(--yellow)' }} />
               CLI required for E2E encryption
             </div>
             <div className="ps-code">
