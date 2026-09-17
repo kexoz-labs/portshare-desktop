@@ -1000,13 +1000,12 @@ body {
 
 /* ─── REQUEST INSPECTOR ───────────────────────────────────── */
 .ps-inspector {
-  display: grid;
-  grid-template-columns: 320px 1fr;
+  display: flex;
   height: 100%;
   overflow: hidden;
 }
 
-.ps-req-filters { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+.ps-req-filters { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-wrap: wrap; }
 .ps-req-filters select, .ps-req-retention select { min-height: 25px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-input); color: var(--text-muted); font: inherit; font-size: 10px; }
 .ps-req-search { display: flex; flex: 1; align-items: center; gap: 6px; min-width: 90px; padding: 0 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-soft); background: var(--bg-input); }
 .ps-req-search input { width: 100%; min-height: 25px; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 10px; }
@@ -1016,6 +1015,9 @@ body {
 .ps-req-copied { color: var(--green); font-size: 10px; }
 
 .ps-req-list {
+  width: 320px;
+  min-width: 260px;
+  flex-shrink: 0;
   border-right: 1px solid var(--border);
   overflow-y: auto;
   display: flex;
@@ -1026,6 +1028,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -1079,6 +1083,8 @@ body {
 .ps-req-duration { font-size: 10px; font-family: var(--mono-font); }
 
 .ps-detail-panel {
+  flex: 1;
+  min-width: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1090,6 +1096,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
   flex-shrink: 0;
   background: var(--bg-sidebar);
   position: sticky;
