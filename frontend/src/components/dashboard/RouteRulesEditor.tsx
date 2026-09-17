@@ -20,7 +20,7 @@ export default function RouteRulesEditor({ rules, onChange, portStatus }: Props)
         <button type="button" className="ps-btn ps-btn-ghost ps-btn-sm" onClick={addRule}><Plus size={13} /> Add route</button>
       </div>
       {rules.map((rule, index) => (
-        <div className="ps-route-rule" key={`${rule.path}-${index}`}>
+        <div className="ps-route-rule" key={index}>
           <div className="ps-route-path"><input className="ps-input ps-input-mono" value={rule.path} placeholder="/api/*" onChange={event => {
             const next = [...rules]
             next[index] = { ...rule, path: event.target.value }
