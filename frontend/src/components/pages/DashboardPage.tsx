@@ -1,10 +1,12 @@
-import { type FormEvent } from 'react'
-import { Plus, Copy, Lock, ShieldAlert, BarChart3, Clock, ArrowRightLeft } from 'lucide-react'
+import { type FormEvent, useState } from 'react'
+import { Plus, Copy, Lock, ShieldAlert, BarChart3, Clock, ArrowRightLeft, QrCode, Zap } from 'lucide-react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { ClientSession, ConnectionState, RequestLogEntry, UsagePoint } from '../../lib/api'
 import { ROOT_DOMAIN, tierOf } from '../../lib/api'
 import NewTunnelModal from '../modals/NewTunnelModal'
-
+import TunnelConsole from '../dashboard/TunnelConsole'
+import QrCodePopover from '../dashboard/QrCodePopover'
+import { usePortScanner } from '../../hooks/usePortScanner'
 
 type Props = {
   session: ClientSession | null
@@ -63,6 +65,9 @@ export default function DashboardPage({
     ? `https://${session.subdomain}.${ROOT_DOMAIN}`
     : null
 
+  const [showQr, setShowQr] = useState<boolean>(false)
+  const detectedPorts = usePortScanner(true)
+
   const bwPct = session
     ? Math.min(100, (session.bandwidthUsed / session.bandwidthLimit) * 100)
     : 0
@@ -96,20 +101,24 @@ export default function DashboardPage({
             <div className="ps-tunnel-card-header">
               <div style={{ flex: 1, minWidth: 0 }}>
                 {publicUrl ? (
-                  <div
-                  className="ps-tunnel-url"
-                  onClick={onCopyUrl}
-                  title="Click to copy"
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                    {publicUrl}
-                  </span>
-                  <span style={{ fontSize: 11, color: copyFeedback === 'copied' ? 'var(--green)' : 'var(--text-soft)', flexShrink: 0, marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Copy size={11} />
-                    {copyFeedback === 'copied' ? 'Copied' : 'Copy'}
-                  </span>
-                </div>
+                  <>
+                    <div
+                      className="ps-tunnel-url"
+                      onClick={onCopyUrl}
+                      title="Click to copy"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        {publicUrl}
+                      </span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setShowQr(v => !v); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-soft)', cursor: 'pointer', padding: 2, display: 'flex' }}><QrCode size={14} /></button>
+                      <span style={{ fontSize: 11, color: copyFeedback === 'copied' ? 'var(--green)' : 'var(--text-soft)', flexShrink: 0, marginLeft: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Copy size={11} />
+                        {copyFeedback === 'copied' ? 'Copied' : 'Copy'}
+                      </span>
+                    </div>
+                    {showQr && publicUrl && <QrCodePopover url={publicUrl} />}
+                  </>
               ) : (
                 <div style={{ color: 'var(--text-soft)', fontSize: 12 }}>
                   No subdomain configured
@@ -127,7 +136,7 @@ export default function DashboardPage({
                   <div className="ps-input-group" style={{ flex: 1 }}>
                     <span className="ps-input-prefix">:</span>
                     <input
-                      className="ps-input ps-input-mono"
+                      className="ps-input"
                       value={portInput}
                       onChange={e => setPortInput(e.target.value.replace(/\D/g, ''))}
                       placeholder="3000"
@@ -146,6 +155,27 @@ export default function DashboardPage({
                   <span className={`ps-port-status ${portListening ? 'listening' : 'offline'}`} style={{ marginTop: 4 }}>
                     {portListening ? 'Listening' : 'Not listening'}
                   </span>
+                )}
+                
+                {detectedPorts.length > 0 && (
+                  <div className="ps-detected-ports">
+                    <span className="ps-label" style={{ fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Zap size={10} style={{ color: 'var(--yellow)' }} /> Detected services
+                    </span>
+                    <div className="ps-detected-list">
+                      {detectedPorts.map(({ port, label }) => (
+                        <button
+                          key={port}
+                          className="ps-detected-item"
+                          type="button"
+                          onClick={() => setPortInput(String(port))}
+                        >
+                          <span className="ps-detected-port">:{port}</span>
+                          <span className="ps-detected-label">{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </form>
@@ -241,6 +271,16 @@ export default function DashboardPage({
         </div>
 
 
+
+        {/* ── Live console ── */}
+        {session?.subdomain && (!tunnelType || tunnelType === 'http' || tunnelType === 'tcp' || tunnelType === 'udp') && (
+          <TunnelConsole
+            connState={connState}
+            port={portInput}
+            publicUrl={publicUrl ?? ''}
+            requestLog={requestLog}
+          />
+        )}
 
         {/* ── E2E CLI info ── */}
         {session?.subdomain && tunnelType === 'e2e' && (

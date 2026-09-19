@@ -28,10 +28,10 @@ type Props = {
 }
 
 const TIER_LABEL: Record<string, string> = {
-  anonymous: 'Guest · 100 MB',
-  verified:  'Verified · 1 GB free',
-  pro:       'Pro · 5 GB',
-  pro_plus:  'Pro+ · 10 GB',
+  anonymous: 'Guest • 100 MB',
+  verified:  'Verified • 1 GB free',
+  pro:       'Pro • 5 GB',
+  pro_plus:  'Pro+ • 10 GB',
 }
 
 export default function SettingsPage({

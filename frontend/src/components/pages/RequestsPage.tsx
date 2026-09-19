@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Trash2, Search, Copy, Download, MousePointerClick, ArrowRightLeft } from 'lucide-react'
+import { Trash2, Search, Copy, Download, MousePointerClick, ArrowRightLeft, RotateCcw } from 'lucide-react'
 import type { RequestLogEntry } from '../../lib/api'
 import { isNoiseRequestPath } from '../../lib/tunnel'
 
@@ -8,6 +8,7 @@ type Props = {
   onClear: () => void
   retention: number
   onRetentionChange: (value: number) => void
+  publicUrl: string
 }
 
 function methodClass(method: string) {
@@ -64,7 +65,7 @@ function curlCommand(entry: RequestLogEntry) {
   return `curl -X ${entry.method}${headers}${body} ${shellQuote(entry.path)}`
 }
 
-export default function RequestsPage({ requestLog, onClear, retention, onRetentionChange }: Props) {
+export default function RequestsPage({ requestLog, onClear, retention, onRetentionChange, publicUrl }: Props) {
   const [selected, setSelected] = useState<RequestLogEntry | null>(null)
   const [activeTab, setActiveTab] = useState<'headers' | 'body' | 'response' | 'timing'>('headers')
   const [showFrameworkRequests, setShowFrameworkRequests] = useState(false)
@@ -73,6 +74,54 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
   const [statusFilter, setStatusFilter] = useState('all')
   const [showSensitive, setShowSensitive] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [replaying, setReplaying] = useState(false)
+  const [replayResult, setReplayResult] = useState<{ status: number; ok: boolean } | null>(null)
+  
+  // Resizing logic
+  const [listWidth, setListWidth] = useState(340)
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = listWidth
+    
+    const handleMouseMove = (ev: MouseEvent) => {
+      setListWidth(Math.max(260, Math.min(800, startWidth + (ev.clientX - startX))))
+    }
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'default'
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    document.body.style.cursor = 'col-resize'
+  }
+
+  const replayRequest = async () => {
+    if (!selected || !publicUrl) return
+    setReplaying(true)
+    setReplayResult(null)
+    try {
+      const url = publicUrl.replace(/\/$/, '') + selected.path
+      const init: RequestInit = {
+        method: selected.method,
+        headers: Object.fromEntries(
+          Object.entries(selected.headers ?? {}).filter(([k]) =>
+            !['host', 'content-length'].includes(k.toLowerCase())
+          )
+        ),
+      }
+      if (selected.body && !['GET', 'HEAD'].includes(selected.method)) {
+        init.body = selected.body
+      }
+      const res = await fetch(url, init)
+      setReplayResult({ status: res.status, ok: res.ok })
+    } catch {
+      setReplayResult({ status: 0, ok: false })
+    } finally {
+      setReplaying(false)
+    }
+  }
 
   const methods = useMemo(() => [...new Set(requestLog.map(entry => entry.method))].sort(), [requestLog])
   const displayLog = requestLog.filter(entry => {
@@ -104,7 +153,7 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
     <div className="ps-main" style={{ overflow: 'hidden' }}>
       <div className="ps-inspector animate-fade-in">
         {/* Request list */}
-        <div className="ps-req-list">
+        <div className="ps-req-list" style={{ width: listWidth, flexShrink: 0 }}>
           <div className="ps-req-list-header">
             <span className="ps-req-list-title">
               Requests {displayLog.length > 0 && <span style={{ color: 'var(--text-soft)' }}>({displayLog.length})</span>}
@@ -180,6 +229,20 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
             ))
           )}
         </div>
+        
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          style={{
+            width: 8,
+            cursor: 'col-resize',
+            backgroundColor: 'transparent',
+            position: 'relative',
+            zIndex: 10,
+            marginLeft: -4,
+            marginRight: -4
+          }}
+        />
 
         {/* Detail panel */}
         <div className="ps-detail-panel">
@@ -196,6 +259,25 @@ export default function RequestsPage({ requestLog, onClear, retention, onRetenti
                 {selected.durationMs != null && (
                   <span style={{ fontSize: 11, color: 'var(--text-soft)', fontFamily: 'var(--mono-font)' }}>
                     {selected.durationMs}ms
+                  </span>
+                )}
+                <button
+                  className="ps-btn ps-btn-secondary ps-btn-sm"
+                  onClick={() => void replayRequest()}
+                  disabled={replaying || !publicUrl}
+                  title={publicUrl ? 'Replay this request' : 'No active tunnel'}
+                >
+                  <RotateCcw size={13} style={{ marginRight: 4 }} />
+                  {replaying ? 'Replaying...' : 'Replay'}
+                </button>
+                {replayResult && (
+                  <span style={{
+                    fontSize: 11,
+                    color: replayResult.ok ? 'var(--green)' : 'var(--red)',
+                    fontFamily: 'var(--mono-font)',
+                    fontWeight: 600,
+                  }}>
+                    → {replayResult.status || 'ERR'}
                   </span>
                 )}
                 <button className="ps-btn ps-btn-ghost ps-btn-sm" onClick={() => void copyCurl()}>

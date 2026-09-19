@@ -20,6 +20,7 @@ import { normalizeSubdomain, extractError } from './lib/utils'
 import { createTunnelConnection } from './lib/tunnel'
 import { useTheme } from './hooks/useTheme'
 import { useRequestLog } from './hooks/useRequestLog'
+import { useTunnelNames } from './hooks/useTunnelNames'
 
 import AppShell from './components/layout/AppShell'
 import Sidebar from './components/layout/Sidebar'
@@ -73,6 +74,7 @@ export default function App() {
   const [dailyUsage, setDailyUsage] = useState<import('./lib/api').UsagePoint[]>([])
   const { theme, toggleTheme } = useTheme()
   const { requestLog, totalRequests, retention, setRetention, addLogEntry, clearLog } = useRequestLog()
+  const { names: tunnelNames, setName: onRenameTunnel } = useTunnelNames()
 
   // Info and Error states removed in favor of toast
 
@@ -97,6 +99,21 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
+
+  const prevConnState = useRef<ConnectionState>('idle')
+  useEffect(() => {
+    const prev = prevConnState.current
+    prevConnState.current = connState
+    if (prev === 'connected' && connState === 'disconnected') {
+      toast.loading('Connection lost. Reconnecting...', { id: 'conn-state', duration: Infinity })
+    } else if (prev === 'disconnected' && connState === 'connected') {
+      toast.success('Reconnected!', { id: 'conn-state', duration: 3000 })
+    } else if (prev === 'connecting' && connState === 'connected' && step === 'dashboard') {
+      // Already connected for first time - no toast needed, UI shows it
+      toast.dismiss('conn-state')
+    }
+  }, [connState, step])
+
 
   const tunnelPort = useRef<number | null>(null)
   const routesRef = useRef<Array<{ path: string; port: number }>>([])
@@ -290,14 +307,11 @@ export default function App() {
 
       if (nextSession.subdomain.length > 0) {
         setStep('dashboard')
-        toast.success('Identity loaded. Set a local port to start forwarding.')
       } else if (!nextSession.ownerEmail) {
         // Brand-new identity: offer Google verification before subdomain setup.
         setStep('gate')
-        toast.success('Identity created. Verify with Google or continue as guest.')
       } else {
         setStep('subdomain')
-        toast.success('Identity created. Reserve your subdomain to continue.')
       }
     } catch (error) {
       setConnState('disconnected')
@@ -772,7 +786,6 @@ export default function App() {
                 isBusy={isBusy}
                 onCopyUrl={handleCopyUrl}
                 copyFeedback={copyFeedback}
-                requestLog={requestLog}
                 routeRules={routeRules}
                 onRouteRulesChange={setRouteRules}
                 routePortStatus={routePortStatus}
@@ -787,6 +800,8 @@ export default function App() {
                   setActivePage('dashboard')
                   setShowNewTunnel(true)
                 }}
+                tunnelNames={tunnelNames}
+                onRenameTunnel={onRenameTunnel}
               />
             )}
 
@@ -796,6 +811,7 @@ export default function App() {
                 onClear={clearLog}
                 retention={retention}
                 onRetentionChange={setRetention}
+                publicUrl={publicUrl}
               />
             )}
 

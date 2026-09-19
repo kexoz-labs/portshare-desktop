@@ -69,39 +69,14 @@ export default function Sidebar({ activePage, onNavigate, requestCount, ownerEma
         ))}
       </nav>
 
-      {/* Connection status + account */}
+      {/* Account / Auth */}
       <div className="ps-sidebar-status">
-        {/* Live connection pill */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          padding: '7px 10px',
-          marginBottom: 8,
-          borderRadius: 'var(--radius-sm)',
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border)',
-        }}>
-          <span style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: connColor[connState],
-            flexShrink: 0,
-            boxShadow: connState === 'connected' ? `0 0 0 2px rgba(52,211,153,0.18)` : 'none',
-            animation: connState === 'connecting' || connState === 'disconnected' ? 'pulse-dot 1.2s ease-in-out infinite' : 'none',
-          }} />
-          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
-            {connLabel[connState]}
-          </span>
-        </div>
-
         {ownerEmail ? (
-          <div style={{ padding: '0 2px 4px' }}>
+          <div style={{ padding: '0 2px' }}>
             <div style={{
               fontSize: 11,
               color: 'var(--text-soft)',
-              marginBottom: 6,
+              marginBottom: 8,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -110,7 +85,7 @@ export default function Sidebar({ activePage, onNavigate, requestCount, ownerEma
               {ownerEmail}
             </div>
             <button
-              className="ps-btn ps-btn-ghost ps-btn-sm"
+              className="ps-btn ps-btn-secondary ps-btn-sm"
               style={{ width: '100%', justifyContent: 'center' }}
               onClick={onLogout}
             >

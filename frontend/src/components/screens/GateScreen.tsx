@@ -157,7 +157,7 @@ export default function GateScreen({ onLogin, onSkip, verifying, gauthEnabled, t
             }}
           >
             <ArrowRight size={15} />
-            Continue as Guest
+            Use a random ID (guest mode)
           </button>
         </div>
 
@@ -169,6 +169,7 @@ export default function GateScreen({ onLogin, onSkip, verifying, gauthEnabled, t
           {[
             { icon: <Zap size={11} />, label: gauthEnabled ? '1 GB with Google' : '100 MB to start' },
             { icon: <Shield size={11} />, label: 'E2E encryption' },
+            { icon: <ArrowRight size={11} />, label: 'Manage billing in browser' },
           ].map(({ icon, label }) => (
             <div key={label} style={{
               display: 'flex', alignItems: 'center', gap: 6,

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import type { ClientSession, ConnectionState, PersistentTunnel, RequestLogEntry } from '../../lib/api'
+import { Edit2 } from 'lucide-react'
+import type { ClientSession, ConnectionState, PersistentTunnel } from '../../lib/api'
 import { ROOT_DOMAIN } from '../../lib/api'
 import RouteRulesEditor from '../dashboard/RouteRulesEditor'
 
@@ -11,7 +12,7 @@ type Props = {
   onPortSubmit: (e: FormEvent<HTMLFormElement>) => void
   onCopyUrl: () => void
   copyFeedback: 'idle' | 'copied' | 'failed'
-  requestLog: RequestLogEntry[]
+  
   routeRules: Array<{ path: string; port: number }>
   onRouteRulesChange: (rules: Array<{ path: string; port: number }>) => void
   routePortStatus: Record<number, boolean | null>
@@ -24,6 +25,8 @@ type Props = {
   portListening: boolean | null
   isBusy: boolean
   onNewTunnel: () => void
+  tunnelNames: Record<string, string>
+  onRenameTunnel: (id: string, name: string) => void
 }
 
 const statusText: Record<ConnectionState, string> = {
@@ -33,10 +36,57 @@ const statusText: Record<ConnectionState, string> = {
   disconnected: 'Reconnecting…',
 }
 
+function TunnelNameRow({ tunnel, tunnelNames, onRenameTunnel }: { tunnel: PersistentTunnel, tunnelNames: Record<string, string>, onRenameTunnel: (id: string, name: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const customName = tunnelNames[tunnel.id]
+  const [value, setValue] = useState(customName ?? '')
+
+  if (editing) {
+    return (
+      <div className="ps-tunnel-name-row">
+        <input
+          autoFocus
+          className="ps-tunnel-rename-input"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={() => { setEditing(false); onRenameTunnel(tunnel.id, value) }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              setEditing(false);
+              onRenameTunnel(tunnel.id, value)
+            }
+            if (e.key === 'Escape') {
+              setEditing(false);
+              setValue(customName ?? '')
+            }
+          }}
+          onClick={e => e.stopPropagation()}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="ps-tunnel-name-row">
+      {customName ? (
+        <>
+          <span className="ps-tunnel-friendly-name">{customName}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-soft)' }}>({tunnel.subdomain}.{ROOT_DOMAIN})</span>
+        </>
+      ) : (
+        <strong>{tunnel.subdomain}.{ROOT_DOMAIN}</strong>
+      )}
+      <button className="ps-rename-btn" onClick={(e) => { e.stopPropagation(); setEditing(true); setValue(customName ?? '') }} title="Rename tunnel">
+        <Edit2 size={12} />
+      </button>
+    </div>
+  )
+}
+
 export default function TunnelsPage({
   session, connState, portInput, setPortInput, onPortSubmit,
-  onCopyUrl, copyFeedback, requestLog, routeRules, onRouteRulesChange, routePortStatus, portListening, isBusy, onNewTunnel,
-  persistentTunnels, selectedTunnelId, onSelectTunnel, onStartTunnel, onStopTunnel, onDeleteTunnel
+  onCopyUrl, copyFeedback, routeRules, onRouteRulesChange, routePortStatus, portListening, isBusy, onNewTunnel,
+  persistentTunnels, selectedTunnelId, onSelectTunnel, onStartTunnel, onStopTunnel, onDeleteTunnel, tunnelNames, onRenameTunnel
 }: Props) {
   const publicUrl = session?.subdomain ? `https://${session.subdomain}.${ROOT_DOMAIN}` : null
   const isConnected = connState === 'connected'
@@ -81,7 +131,7 @@ export default function TunnelsPage({
                   >
                     <span className={`ps-saved-tunnel-dot ${tunnel.active ? 'active' : ''}`} />
                     <div className="ps-saved-tunnel-main">
-                      <strong>{tunnel.subdomain}.{ROOT_DOMAIN}</strong>
+                      <TunnelNameRow tunnel={tunnel} tunnelNames={tunnelNames} onRenameTunnel={onRenameTunnel} />
                       <small>localhost:{tunnel.port} · {tunnel.tunnelType?.toUpperCase() ?? 'HTTP'}</small>
                     </div>
                     <span className={`ps-badge ${tunnel.active ? 'ps-badge-green' : 'ps-badge-gray'}`}>
@@ -241,3 +291,5 @@ export default function TunnelsPage({
     </div>
   )
 }
+
+
